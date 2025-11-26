@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>John Roberts</title>
-    <meta name="description" content="Personal tech blog, notes, and commit log.">
+    <title><!-- CONFIG_NAME --></title>
+    <meta name="description" content="<!-- CONFIG_TAGLINE -->">
+    <link rel="alternate" type="application/rss+xml" title="RSS Feed for <!-- CONFIG_NAME -->" href="/feed.xml" />
 
     <style>
         /* --- CONFIGURATION --- */
@@ -49,10 +50,10 @@
 
         /* --- HEADER --- */
         header { text-align: center; margin-bottom: 3.5rem; }
-        h1 { font-size: 3rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 2rem; }
+        h1 { font-size: 3rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+        .bio { font-family: var(--f-sans); font-size: 1rem; color: var(--c-sub); margin-bottom: 2rem; }
         .filter-interface { display: flex; flex-direction: column; align-items: center; gap: 1rem; min-height: 6rem; }
-        .filter-list { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem 1rem; max-width: 55ch; font-family: var(--f-sans); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--c-sub); }
-
+        .filter-list { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem 1rem; max-width: 55ch; font-family: var(--f-sans); font-weight: 500; font-size: 0.8rem; color: var(--c-sub); }
         .filter-tag { cursor: pointer; user-select: none; transition: color 0.2s; }
         .filter-tag:hover { color: var(--c-text); }
         .filter-tag::before { content: "[ "; opacity: 0; color: var(--c-accent); transition: opacity 0.2s; }
@@ -66,14 +67,8 @@
         .clear-btn:hover { color: var(--c-text); border-bottom-style: solid; }
 
         /* --- CSS LOGIC (Base) --- */
-        /* When ANY filter is checked, dim ALL entries */
         body:has(.filter-check:checked) .entry { opacity: 0.1; filter: grayscale(100%) blur(1px); }
 
-        /*
-         * DYNAMIC CSS INJECTION
-         * The build script will inject the specific :has() rules here
-         * for every tag found in the content.
-         */
         <!-- INJECT_CSS -->
 
         /* --- ENTRY STYLES --- */
@@ -84,9 +79,23 @@
         .entry-row { display: flex; align-items: baseline; width: 100%; gap: 0.5rem; }
         .dots { flex-grow: 1; border-bottom: 2px dotted var(--c-sub); opacity: 0.4; position: relative; }
         .meta-group { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
-        .meta-stat { display: flex; align-items: center; gap: 0.3em; font-family: var(--f-sans); font-size: 0.75rem; color: var(--c-sub); font-weight: 500; }
+
+        /* UPDATED META STAT: Now handles Anchor tags */
+        .meta-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.3em;
+            font-family: var(--f-sans);
+            font-size: 0.75rem;
+            color: var(--c-sub);
+            font-weight: 500;
+            text-decoration: none; /* Remove default underline */
+        }
         .meta-stat svg { width: 1em; height: 1em; stroke: currentColor; stroke-width: 2; fill: none; }
         .entry:hover .meta-stat { color: var(--c-text); }
+        /* Hover specific to the link */
+        a.meta-stat:hover { color: var(--c-accent); text-decoration: underline; }
+
         .entry-date { font-family: var(--f-sans); font-weight: 500; font-size: 0.85rem; color: var(--c-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
         /* Types */
@@ -97,7 +106,7 @@
         .entry.tag-not { padding-left: 1.5rem; border-left: 3px solid color-mix(in oklch, var(--c-sub), transparent 70%); margin-bottom: 3rem; }
         .note-text { font-size: 1.1rem; line-height: 1.5; color: var(--c-text); margin-bottom: 0.5rem; font-style: italic; }
         .note-meta { font-family: var(--f-sans); font-size: 0.75rem; color: var(--c-sub); display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;}
-        .note-link { font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .note-link { font-weight: 600; }
         .note-link:hover { text-decoration: underline; color: var(--c-accent); }
         .note-media { margin-bottom: 0.75rem; border-radius: 4px; overflow: hidden; border: 1px solid color-mix(in oklch, var(--c-text), transparent 90%); }
         .note-media img { display: block; width: 100%; height: auto; }
@@ -118,11 +127,13 @@
             .meta-stat { order: 2; font-size: 0.75rem; }
             .entry-summary { margin-top: 0; font-size: 0.9rem; }
             .entry.tag-not { padding-left: 1rem; border-left-width: 2px; }
+            .note-meta { gap: 0.5rem 1rem; justify-content: flex-start; }
+            .note-meta > span:not(.meta-stat) { display: none; }
             h1 { font-size: 2.25rem; }
             .the-table { padding-bottom: 6rem; }
         }
 
-        /* FOOTER */
+        /* --- FOOTER --- */
         .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: var(--f-sans); font-weight: 900; font-size: clamp(2rem, 5vw, 4rem); color: var(--c-text); opacity: 0.03; text-align: center; width: 100%; pointer-events: none; user-select: none; text-transform: uppercase; letter-spacing: -0.02em; }
         .footer-content { position: relative; z-index: 2; width: 100%; max-width: var(--w-content); margin-inline: auto; font-family: var(--f-sans); font-size: 0.8rem; letter-spacing: 0.02em; }
         .copyright { font-weight: 700; color: var(--c-text); margin-bottom: 0.5rem; }
@@ -143,12 +154,10 @@
     <footer class="the-table">
         <div class="watermark">This space intentionally<br>left blank</div>
         <div class="footer-content">
-            <div class="copyright">John Roberts &copy; 2025</div>
+            <div class="copyright"><!-- CONFIG_NAME --> &copy; <!-- CONFIG_YEAR_RANGE --></div>
             <div class="controls-row">
                 <nav class="social-links">
-                    <a href="mailto:hello@example.com">email</a>
-                    <a href="#">github</a>
-                    <a href="#">bluesky</a>
+                    <!-- INJECT_SOCIALS -->
                 </nav>
                 <div class="theme-switcher">
                     <button class="theme-btn" data-set-theme="light">light</button>
@@ -162,7 +171,8 @@
     <main class="the-paper">
         <div class="paper-content">
             <header>
-                <h1>John Roberts</h1>
+                <h1><!-- CONFIG_NAME --></h1>
+                <p class="bio"><!-- CONFIG_TAGLINE --></p>
                 <div class="filter-interface">
                     <div class="filter-list">
                         <!-- INJECT_FILTER_LIST -->
@@ -182,7 +192,6 @@
     </main>
 
     <script>
-        // THEME
         const html = document.documentElement;
         const themeBtns = document.querySelectorAll('[data-set-theme]');
         const savedTheme = localStorage.getItem('theme');
@@ -194,9 +203,6 @@
         applyTheme(savedTheme || 'system');
         themeBtns.forEach(btn => btn.addEventListener('click', () => applyTheme(btn.dataset.setTheme)));
 
-        // FILTERS
-        // Checkboxes are injected dynamically, so we wait for DOM or just query them now
-        // since script runs at end of body.
         const checkboxes = document.querySelectorAll('.filter-check');
         const clearContainer = document.getElementById('clear-container');
         const clearBtn = document.getElementById('clear-filters');
@@ -212,9 +218,8 @@
             if (tags) {
                 const activeTags = tags.split(',');
                 checkboxes.forEach(box => {
-                    // ID format: f-tagname
                     const tagKey = box.id.replace('f-', '');
-                    box.checked = activeTags.includes(tagKey);
+                    if(box) box.checked = activeTags.includes(tagKey);
                 });
             }
             updateClearButton();
@@ -232,7 +237,7 @@
         if(clearBtn) {
             clearBtn.addEventListener('click', () => { checkboxes.forEach(box => box.checked = false); updateURL(); });
         }
-        checkboxes.forEach(box => box.addEventListener('change', updateURL));
+        document.querySelectorAll('.filter-check').forEach(box => box.addEventListener('change', updateURL));
         loadStateFromURL();
     </script>
 </body>

@@ -1,19 +1,36 @@
 {
-    "github": {
-    "username": "sanko",
+  "features": {
+    "github_discussions": true,
+    "github_issues": false,
+    "github_releases": true,
+    "bluesky_notes": true
+  },
+  "profile": {
+    "name": "Sanko Robinson",
+    "tagline": "Person.",
+    "url": "https://sankorobinson.com",
+    "email": "sanko@cpan.org",
+    "copyright_start": "2000",
+    "socials": [
+      { "name": "github",  "url": "https://github.com/sanko" },
+      { "name": "email",   "url": "mailto:sanko@cpan.org" },
+      { "name": "bluesky", "url": "https://bsky.app/profile/sankorobinson.com" }
+    ]
+  },
+  "github": {
     "sources": [
-      {
-        "owner": "sanko",
-        "repos": ["infix", "Affix.pm", "infix.pm"]
-      },
-      {
-        "owner": "Perl-SDL3",
-        "repos": ["Alien-SDL3.pm", "Alien-SDL3_image.pm", "Alien-SDL3_mixer.pm", "Alien-SDL3_ttf.pm"]
-      }
+      { "owner": "sanko", "repos": ["infix", "Affix.pm", "infix.pm"] },
+      { "owner": "Perl-SDL3", "repos": [ "Alien-SDL3.pm", "Alien-SDL3_image.pm", "Alien-SDL3_mixer.pm", "Alien-SDL3_ttf.pm"] }
     ],
     "groups": {
-      "infix": ["infix"],
-      "Affix.pm": ["Affix.pm", "infix"]
+      "SDL3.pm": ["Perl-SDL3/Alien-SDL3.pm", "Perl-SDL3/Alien-SDL3_image.pm"]
+    },
+    "tag_overrides": {
+        "css": "CSS",
+        "ai": "AI",
+        "ui": "UI",
+        "devops": "DevOps",
+        "affix.pm": "Affix.pm"
     }
   },
   "bluesky": {
