@@ -7,11 +7,8 @@
     <meta name="description" content="Personal tech blog, notes, and commit log.">
 
     <style>
-        /*
-         * 1. CONFIGURATION
-         */
+        /* --- CONFIGURATION --- */
         :root {
-            /* Palette: OKLCH */
             --c-paper: oklch(99% 0 0);
             --c-table: oklch(96% 0.01 200);
             --c-text: oklch(20% 0 0);
@@ -20,12 +17,10 @@
             --c-code: oklch(45% 0.15 140);
             --c-shadow: oklch(20% 0.02 270 / 10%);
 
-            /* Typography */
             --f-serif: 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, serif;
             --f-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             --f-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
 
-            /* Sizing */
             --w-content: 42rem;
             --s-gutter: clamp(1.5rem, 5vw, 3rem);
 
@@ -34,42 +29,12 @@
                            border-color 0.5s ease;
         }
 
-        /* Dark Mode */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --c-paper: oklch(18% 0 0);
-                --c-table: oklch(14% 0 0);
-                --c-text: oklch(90% 0.01 270);
-                --c-sub: oklch(60% 0.01 270);
-                --c-accent: oklch(75% 0.14 270);
-                --c-code: oklch(80% 0.15 140);
-                --c-shadow: oklch(0% 0 0 / 50%);
-            }
-        }
+        /* --- THEMES --- */
+        @media (prefers-color-scheme: dark) { :root { --c-paper: oklch(18% 0 0); --c-table: oklch(14% 0 0); --c-text: oklch(90% 0.01 270); --c-sub: oklch(60% 0.01 270); --c-accent: oklch(75% 0.14 270); --c-code: oklch(80% 0.15 140); --c-shadow: oklch(0% 0 0 / 50%); } }
+        [data-theme="light"] { --c-paper: oklch(99% 0 0); --c-table: oklch(96% 0.01 200); --c-text: oklch(20% 0 0); --c-sub: oklch(50% 0 0); --c-accent: oklch(45% 0.24 270); --c-code: oklch(45% 0.15 140); --c-shadow: oklch(20% 0.02 270 / 10%); }
+        [data-theme="dark"] { --c-paper: oklch(18% 0 0); --c-table: oklch(14% 0 0); --c-text: oklch(90% 0.01 270); --c-sub: oklch(60% 0.01 270); --c-accent: oklch(75% 0.14 270); --c-code: oklch(80% 0.15 140); --c-shadow: oklch(0% 0 0 / 50%); }
 
-        [data-theme="light"] {
-            --c-paper: oklch(99% 0 0);
-            --c-table: oklch(96% 0.01 200);
-            --c-text: oklch(20% 0 0);
-            --c-sub: oklch(50% 0 0);
-            --c-accent: oklch(45% 0.24 270);
-            --c-code: oklch(45% 0.15 140);
-            --c-shadow: oklch(20% 0.02 270 / 10%);
-        }
-
-        [data-theme="dark"] {
-            --c-paper: oklch(18% 0 0);
-            --c-table: oklch(14% 0 0);
-            --c-text: oklch(90% 0.01 270);
-            --c-sub: oklch(60% 0.01 270);
-            --c-accent: oklch(75% 0.14 270);
-            --c-code: oklch(80% 0.15 140);
-            --c-shadow: oklch(0% 0 0 / 50%);
-        }
-
-        /*
-         * 2. BASE STYLES
-         */
+        /* --- BASE --- */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { background-color: var(--c-table); color: var(--c-text); font-family: var(--f-serif); line-height: 1.5; min-height: 100dvh; transition: var(--trans-theme); }
         input.filter-check { display: none; }
@@ -77,16 +42,12 @@
         a:hover { color: var(--c-accent); }
         .the-paper, .the-table, .theme-btn, .year-title, .dots, .entry-date, .entry-summary, .filter-tag, .note-text, .note-meta, .rel-header, .rel-msg, .meta-stat { transition: var(--trans-theme); }
 
-        /*
-         * 3. LAYOUT (Table & Paper)
-         */
+        /* --- LAYOUT --- */
         .the-table { position: fixed; inset: 0; z-index: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: var(--s-gutter); pointer-events: auto; }
         .the-paper { position: relative; z-index: 1; background-color: var(--c-paper); min-height: 100dvh; margin-bottom: 100dvh; padding: var(--s-gutter); box-shadow: 0 50px 100px -20px var(--c-shadow); display: flex; flex-direction: column; align-items: center; }
         .paper-content { width: 100%; max-width: var(--w-content); margin-top: 4rem; margin-bottom: 6rem; }
 
-        /*
-         * 4. HEADER & FILTERS
-         */
+        /* --- HEADER --- */
         header { text-align: center; margin-bottom: 3.5rem; }
         h1 { font-size: 3rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 2rem; }
         .filter-interface { display: flex; flex-direction: column; align-items: center; gap: 1rem; min-height: 6rem; }
@@ -96,64 +57,43 @@
         .filter-tag:hover { color: var(--c-text); }
         .filter-tag::before { content: "[ "; opacity: 0; color: var(--c-accent); transition: opacity 0.2s; }
         .filter-tag::after { content: " ]"; opacity: 0; color: var(--c-accent); transition: opacity 0.2s; }
+        .filter-separator { opacity: 0.3; margin: 0 0.25rem; }
 
+        /* --- CLEAR BTN --- */
         .clear-container { height: 2rem; width: 100%; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transform: translateY(5px); transition: all 0.4s ease; }
         .clear-container.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
         .clear-btn { font-family: var(--f-sans); font-size: 0.75rem; background: none; border: none; color: var(--c-accent); cursor: pointer; border-bottom: 1px dotted var(--c-accent); }
         .clear-btn:hover { color: var(--c-text); border-bottom-style: solid; }
 
-        /*
-         * 5. CSS FILTERING LOGIC
-         */
-        body:has(#f-css:checked) label[for="f-css"], body:has(#f-sys:checked) label[for="f-sys"], body:has(#f-des:checked) label[for="f-des"],
-        body:has(#f-per:checked) label[for="f-per"], body:has(#f-sec:checked) label[for="f-sec"], body:has(#f-ai:checked)  label[for="f-ai"],
-        body:has(#f-dat:checked) label[for="f-dat"], body:has(#f-dev:checked) label[for="f-dev"], body:has(#f-car:checked) label[for="f-car"],
-        body:has(#f-mob:checked) label[for="f-mob"], body:has(#f-not:checked) label[for="f-not"], body:has(#f-rel:checked) label[for="f-rel"] { color: var(--c-text); font-weight: 800; }
-
-        body:has(#f-css:checked) label[for="f-css"]::before, body:has(#f-css:checked) label[for="f-css"]::after,
-        body:has(#f-sys:checked) label[for="f-sys"]::before, body:has(#f-sys:checked) label[for="f-sys"]::after,
-        body:has(#f-des:checked) label[for="f-des"]::before, body:has(#f-des:checked) label[for="f-des"]::after,
-        body:has(#f-per:checked) label[for="f-per"]::before, body:has(#f-per:checked) label[for="f-per"]::after,
-        body:has(#f-sec:checked) label[for="f-sec"]::before, body:has(#f-sec:checked) label[for="f-sec"]::after,
-        body:has(#f-ai:checked)  label[for="f-ai"]::before,  body:has(#f-ai:checked)  label[for="f-ai"]::after,
-        body:has(#f-dat:checked) label[for="f-dat"]::before, body:has(#f-dat:checked) label[for="f-dat"]::after,
-        body:has(#f-dev:checked) label[for="f-dev"]::before, body:has(#f-dev:checked) label[for="f-dev"]::after,
-        body:has(#f-car:checked) label[for="f-car"]::before, body:has(#f-car:checked) label[for="f-car"]::after,
-        body:has(#f-mob:checked) label[for="f-mob"]::before, body:has(#f-mob:checked) label[for="f-mob"]::after,
-        body:has(#f-not:checked) label[for="f-not"]::before, body:has(#f-not:checked) label[for="f-not"]::after,
-        body:has(#f-rel:checked) label[for="f-rel"]::before, body:has(#f-rel:checked) label[for="f-rel"]::after { opacity: 1; }
-
+        /* --- CSS LOGIC (Base) --- */
+        /* When ANY filter is checked, dim ALL entries */
         body:has(.filter-check:checked) .entry { opacity: 0.1; filter: grayscale(100%) blur(1px); }
-        body:has(#f-css:checked) .entry.tag-css, body:has(#f-sys:checked) .entry.tag-sys, body:has(#f-des:checked) .entry.tag-des,
-        body:has(#f-per:checked) .entry.tag-per, body:has(#f-sec:checked) .entry.tag-sec, body:has(#f-ai:checked)  .entry.tag-ai,
-        body:has(#f-dat:checked) .entry.tag-dat, body:has(#f-dev:checked) .entry.tag-dev, body:has(#f-car:checked) .entry.tag-car,
-        body:has(#f-mob:checked) .entry.tag-mob, body:has(#f-not:checked) .entry.tag-not, body:has(#f-rel:checked) .entry.tag-rel { opacity: 1; filter: none; }
 
         /*
-         * 6. ENTRY STYLES
+         * DYNAMIC CSS INJECTION
+         * The build script will inject the specific :has() rules here
+         * for every tag found in the content.
          */
+        <!-- INJECT_CSS -->
+
+        /* --- ENTRY STYLES --- */
         .year-block { margin-bottom: 4rem; }
         .year-title { font-family: var(--f-sans); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; color: var(--c-text); margin-bottom: 2rem; padding-bottom: 0.25rem; border-bottom: 2px solid var(--c-text); display: inline-block; }
         .entry { margin-bottom: 2.5rem; transition: opacity 0.4s ease, filter 0.4s ease; }
 
         .entry-row { display: flex; align-items: baseline; width: 100%; gap: 0.5rem; }
         .dots { flex-grow: 1; border-bottom: 2px dotted var(--c-sub); opacity: 0.4; position: relative; }
-
-        /* METADATA GROUP (Metrics + Date) */
         .meta-group { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
-
         .meta-stat { display: flex; align-items: center; gap: 0.3em; font-family: var(--f-sans); font-size: 0.75rem; color: var(--c-sub); font-weight: 500; }
         .meta-stat svg { width: 1em; height: 1em; stroke: currentColor; stroke-width: 2; fill: none; }
         .entry:hover .meta-stat { color: var(--c-text); }
-
         .entry-date { font-family: var(--f-sans); font-weight: 500; font-size: 0.85rem; color: var(--c-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-        /* TYPE 1: STANDARD ARTICLE */
+        /* Types */
         .entry-title { font-size: 1.35rem; font-weight: 400; white-space: nowrap; }
         .entry-summary { display: block; margin-top: 0.25rem; font-size: 0.95rem; color: var(--c-sub); max-width: 90%; line-height: 1.4; text-wrap: pretty; }
         .entry-title:hover { text-decoration: underline; text-underline-offset: 4px; color: var(--c-accent); }
 
-        /* TYPE 2: BLUESKY NOTE */
         .entry.tag-not { padding-left: 1.5rem; border-left: 3px solid color-mix(in oklch, var(--c-sub), transparent 70%); margin-bottom: 3rem; }
         .note-text { font-size: 1.1rem; line-height: 1.5; color: var(--c-text); margin-bottom: 0.5rem; font-style: italic; }
         .note-meta { font-family: var(--f-sans); font-size: 0.75rem; color: var(--c-sub); display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;}
@@ -162,7 +102,6 @@
         .note-media { margin-bottom: 0.75rem; border-radius: 4px; overflow: hidden; border: 1px solid color-mix(in oklch, var(--c-text), transparent 90%); }
         .note-media img { display: block; width: 100%; height: auto; }
 
-        /* TYPE 3: COMMIT / RELEASE */
         .entry.tag-rel { margin-bottom: 2rem; }
         .rel-repo { font-family: var(--f-mono); font-weight: 700; font-size: 0.95rem; color: var(--c-text); }
         .rel-version { font-family: var(--f-mono); font-size: 0.75rem; color: var(--c-accent); background: color-mix(in oklch, var(--c-accent), transparent 90%); padding: 1px 4px; border-radius: 3px; margin-left: 0.5ch; }
@@ -183,22 +122,9 @@
             .the-table { padding-bottom: 6rem; }
         }
 
-        /*
-         * 7. FOOTER
-         */
+        /* FOOTER */
         .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: var(--f-sans); font-weight: 900; font-size: clamp(2rem, 5vw, 4rem); color: var(--c-text); opacity: 0.03; text-align: center; width: 100%; pointer-events: none; user-select: none; text-transform: uppercase; letter-spacing: -0.02em; }
-
-        .footer-content {
-            position: relative;
-            z-index: 2;
-            width: 100%;
-            max-width: var(--w-content);
-            margin-inline: auto;
-            font-family: var(--f-sans);
-            font-size: 0.8rem;
-            letter-spacing: 0.02em;
-        }
-
+        .footer-content { position: relative; z-index: 2; width: 100%; max-width: var(--w-content); margin-inline: auto; font-family: var(--f-sans); font-size: 0.8rem; letter-spacing: 0.02em; }
         .copyright { font-weight: 700; color: var(--c-text); margin-bottom: 0.5rem; }
         .controls-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem; color: var(--c-sub); }
         .social-links { display: flex; gap: 1.5rem; }
@@ -212,19 +138,7 @@
 </head>
 <body>
 
-    <!-- FILTERS -->
-    <input type="checkbox" class="filter-check" id="f-not">
-    <input type="checkbox" class="filter-check" id="f-rel">
-    <input type="checkbox" class="filter-check" id="f-css">
-    <input type="checkbox" class="filter-check" id="f-sys">
-    <input type="checkbox" class="filter-check" id="f-des">
-    <input type="checkbox" class="filter-check" id="f-per">
-    <input type="checkbox" class="filter-check" id="f-sec">
-    <input type="checkbox" class="filter-check" id="f-ai">
-    <input type="checkbox" class="filter-check" id="f-dat">
-    <input type="checkbox" class="filter-check" id="f-dev">
-    <input type="checkbox" class="filter-check" id="f-car">
-    <input type="checkbox" class="filter-check" id="f-mob">
+    <!-- INJECT_FILTERS -->
 
     <footer class="the-table">
         <div class="watermark">This space intentionally<br>left blank</div>
@@ -246,11 +160,29 @@
     </footer>
 
     <main class="the-paper">
-        <!-- INJECT_CONTENT -->
+        <div class="paper-content">
+            <header>
+                <h1>John Roberts</h1>
+                <div class="filter-interface">
+                    <div class="filter-list">
+                        <!-- INJECT_FILTER_LIST -->
+                    </div>
+                    <div id="clear-container" class="clear-container">
+                        <button id="clear-filters" class="clear-btn">Clear Selection</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- INJECT_CONTENT -->
+
+            <div style="text-align: center; color: var(--c-sub); margin-top: 4rem; font-family: var(--f-sans); font-size: 0.8rem;">
+                ( End of Paper )
+            </div>
+        </div>
     </main>
 
-    <!-- JS Logic -->
     <script>
+        // THEME
         const html = document.documentElement;
         const themeBtns = document.querySelectorAll('[data-set-theme]');
         const savedTheme = localStorage.getItem('theme');
@@ -262,25 +194,32 @@
         applyTheme(savedTheme || 'system');
         themeBtns.forEach(btn => btn.addEventListener('click', () => applyTheme(btn.dataset.setTheme)));
 
+        // FILTERS
+        // Checkboxes are injected dynamically, so we wait for DOM or just query them now
+        // since script runs at end of body.
         const checkboxes = document.querySelectorAll('.filter-check');
         const clearContainer = document.getElementById('clear-container');
         const clearBtn = document.getElementById('clear-filters');
+
         const updateClearButton = () => {
             const anyChecked = Array.from(checkboxes).some(box => box.checked);
             if (anyChecked) clearContainer.classList.add('is-visible'); else clearContainer.classList.remove('is-visible');
         };
+
         const loadStateFromURL = () => {
             const params = new URLSearchParams(window.location.search);
             const tags = params.get('tags');
             if (tags) {
                 const activeTags = tags.split(',');
                 checkboxes.forEach(box => {
+                    // ID format: f-tagname
                     const tagKey = box.id.replace('f-', '');
                     box.checked = activeTags.includes(tagKey);
                 });
             }
             updateClearButton();
         };
+
         const updateURL = () => {
             const activeTags = [];
             checkboxes.forEach(box => { if (box.checked) activeTags.push(box.id.replace('f-', '')); });
@@ -289,7 +228,10 @@
             window.history.replaceState({}, '', url);
             updateClearButton();
         };
-        clearBtn.addEventListener('click', () => { checkboxes.forEach(box => box.checked = false); updateURL(); });
+
+        if(clearBtn) {
+            clearBtn.addEventListener('click', () => { checkboxes.forEach(box => box.checked = false); updateURL(); });
+        }
         checkboxes.forEach(box => box.addEventListener('change', updateURL));
         loadStateFromURL();
     </script>

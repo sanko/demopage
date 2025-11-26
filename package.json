@@ -17,5 +17,10 @@
   "bugs": {
     "url": "https://github.com/sanko/demopage/issues"
   },
-  "homepage": "https://github.com/sanko/demopage#readme"
+  "homepage": "https://github.com/sanko/demopage#readme",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "markdown-it": "^14.1.0",
+    "node-fetch": "^2.7.0"
+  }
 }

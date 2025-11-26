@@ -1,9 +1,22 @@
 {
-  "github": {
-    "username": "johnroberts",
-    "repos": ["my-blog", "obsidian-sync", "dotfiles", "palette-gen"]
+    "github": {
+    "username": "sanko",
+    "sources": [
+      {
+        "owner": "sanko",
+        "repos": ["infix", "Affix.pm", "infix.pm"]
+      },
+      {
+        "owner": "Perl-SDL3",
+        "repos": ["Alien-SDL3.pm", "Alien-SDL3_image.pm", "Alien-SDL3_mixer.pm", "Alien-SDL3_ttf.pm"]
+      }
+    ],
+    "groups": {
+      "infix": ["infix"],
+      "Affix.pm": ["Affix.pm", "infix"]
+    }
   },
   "bluesky": {
-    "handles": ["johnroberts.bsky.social"]
+    "handles": ["sankorobinson.com"]
   }
 }

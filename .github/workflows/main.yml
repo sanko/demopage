@@ -3,7 +3,7 @@ name: Build and Deploy
 on:
   # Run daily to fetch new Bluesky/GitHub interactions
   schedule:
-    - cron: '0 8 * * *' # 8am UTC daily
+    - cron: '0 0/2 * * *' # Every 2 hours
   # Run when you push changes to config or template
   push:
     branches: [ main ]
