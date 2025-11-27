@@ -1,43 +1,328 @@
 # Monolog
 
-**Monolog** is a headless, single-column content aggregator and personal website engine.
+**Your digital life, unified.**
 
-It treats the internet as your CMS. You write posts on Github or Bluesky, push code to GitLab or Gitea, and bookmark links on Raindrop. Monolog fetches it all, filters it, and builds a static HTML site (with RSS feeds) automatically.
+Monolog is a personal website engine for developers who want to own their content without managing a CMS. It operates on a simple philosophy: **You shouldn't have to leave your workflow to update your website.**
 
-## 🚀 Quick Start
+If you push code to GitHub, post thoughts on Bluesky, bookmark articles on Raindrop, or upload videos to YouTube, Monolog fetches that activity and weaves it into a single, beautiful, chronological timeline.
 
-1.  **Fork this Repository.**
-2.  **Install Dependencies:**
+It is "Headless" in the truest sense: You don't write content *for* Monolog. You live your digital life, and Monolog records it.
+
+### The Aesthetic
+*   **Paper & Ink:** A high-contrast, single-column design focused entirely on typography and readability.
+*   **Zero Client-Side Logic:** The filtering and theming happen via CSS. The site loads instantly.
+*   **No Maintenance:** It can run entirely on GitHub Actions. No servers to patch, no databases to back up.
+
+---
+
+## 🚀 Getting Started
+
+You can have this site running in about 5 minutes.
+
+1.  **Fork this Repository**
+    Click the "Fork" button in the top right to copy this project to your GitHub account.
+
+2.  **Clone & Install**
+    Pull it down to your machine to set up the config.
     ```bash
+    git clone https://github.com/YOUR_USERNAME/monolog.git
+    cd monolog
     npm install
     ```
-3.  **Configure:** Copy the example config and edit it.
-    ```bash
-    cp config.example.json config.json
-    ```
-4.  **Set Secrets:** Create a `.env` file (see [Secrets](#-secrets--environment-variables)).
-5.  **Build:**
+
+3.  **Tell it who you are**
+    Rename `config.example.json` to `config.json` and open it. Change the `profile` block to match your identity.
+
+4.  **Build locally**
+    Create a `.env` file with a `GH_TOKEN` (see [Secrets](#-secrets--keys) below) and run:
     ```bash
     node build.js
     ```
+    Open `index.html` in your browser to see your timeline.
 
-Personally, I'd throw the thing in a Github Workflow.
+## ⚙️ Configuration (`config.json`)
+
+The `config.json` file is the brain of your site. Here is every option available.
+
+### 1. Profile
+This section controls the header, footer, and SEO metadata.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `name` | `string` | **Required.** Displayed in the header and `<title>`. |
+| `tagline` | `string` | Displayed below the name and in the meta description. |
+| `url` | `string` | **Required.** The production URL (used for canonical links and RSS). |
+| `email` | `string` | Displayed in the footer. |
+| `og_image` | `string` | Absolute URL to an image used for Twitter/OpenGraph share cards. |
+| `copyright_start`| `string` | Year to start the copyright range (e.g., "2023"). |
+| `socials` | `array` | List of objects `{ "name": "...", "url": "..." }` displayed in the footer. |
+
+### 2. Analytics
+
+Monolog supports privacy-friendly analytics out of the box.
+
+| Provider | Property | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Plausible** | `enabled` | `bool` | Set to `true` to inject the script. |
+| | `domain` | `string` | Your Plausible domain (e.g., `mysite.com`). |
+| | `src` | `string` | The script source (usually `https://plausible.io/js/script.js`). |
+| **Cloudflare** | `enabled` | `bool` | Set to `true` to inject the beacon. |
+| | `token` | `string` | Your Cloudflare Web Analytics beacon token. |
 
 ```yaml
-name: Build and Deploy Monolog
+{
+  "analytics": {
+    "plausible": {
+      "enabled": true,
+      "domain": "johnroberts.com",
+      "src": "https://plausible.io/js/script.js"
+    },
+    "cloudflare": {
+      "enabled": false,
+      "token": "YOUR_BEACON_TOKEN"
+    }
+  }
+}
+```
+
+---
+
+## ✍️ How to Write Content
+
+Monolog uses **GitHub Discussions** as its primary authoring tool. To set this up, enable "Discussions" in your GitHub repository settings.
+
+| Content Type | GitHub Category | Behavior |
+| :--- | :--- | :--- |
+| **Articles** | `General` | Long-form writing. Displayed with a title and a summary. Labels become filter tags (e.g., "CSS", "Rust"). |
+| **Notes** | `Notes` | Micro-blogging. No title required; the full text is shown inline. Perfect for status updates or quick thoughts. |
+| **The "Now" Page** | `Announcements` | *Special:* Monolog looks for the most recent post in the `Announcements` category of your `username.github.io` repo. It pins this content to the very top of your site. |
+| **Drafts** | `Drafts` | Anything in here is ignored by the build engine. |
+
+*Note: You can also pull "Notes" from Bluesky or Mastodon automatically.*
+
+---
+
+## 🔌 Connecting Services
+
+Monolog is an aggregator. You define "Sources" in your `config.json`, and the engine does the rest.
+
+### GitHub
+
+This is the core of Monolog. We can track multiple repositories (e.g., your personal blog repo vs. your work organization). It can pull content from discussions, issues, and tagged releases.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `name` | `string` | **Required.** Internal ID used for generating specific RSS feeds later. |
+| `owner` | `string` | **Required.** The GitHub username or Organization name. |
+| `repos` | `array` | **Required.** List of repository names to fetch from. |
+| `discussions` | `bool` | Default `true`. Fetch blog posts/notes. |
+| `releases` | `bool` | Default `true`. Fetch releases/tags. |
+| `issues` | `bool` | Default `false`. Fetch issue activity. |
+
+**Global GitHub Options:**
+| Property | Description |
+| :--- | :--- |
+| `groups` | Map specific repositories to a "Topic" tag in the filter bar. Key is the Tag name, Value is array of `owner/repo`. |
+| `tag_overrides` | Dictionary to fix tag capitalization (e.g., `{"css": "CSS"}`). Default is lowercase slug. |
+
+```json
+"github": {
+  "sources": [
+    {
+      "name": "personal",       // Used for internal ID
+      "owner": "johnroberts",   // Your username
+      "repos": ["my-blog"],     // The repo where you write Discussions
+      "discussions": true,      // Enable fetching Articles/Notes
+      "releases": true,         // Enable fetching Release history
+      "issues": false           // Ignore issues
+    }
+  ],
+  // Optional: Map specific repos to a clean "Topic" tag in the UI
+  "groups": {
+    "Infrastructure": ["dotfiles", "server-config"]
+  },
+  // Optional: Fix tag capitalization (e.g. "css" -> "CSS")
+  "tag_overrides": { "css": "CSS", "api": "API" }
+}
+```
+### Bluesky
+
+Fetches posts as "Notes". Includes images and engagement metrics. All social media posts appear as 'Notes' in your timeline.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `name` | `string` | Internal ID. |
+| `handle` | `string` | Your Bluesky handle (e.g., `user.bsky.social`). |
+| `feed` | `string` | *(Optional)* A custom feed URI (e.g., `at://did:plc:...`). If omitted, fetches the user's author feed. |
+
+Example:
+
+```json
+"bluesky": {
+  "sources": [
+    { "name": "main", "handle": "john.bsky.social" }
+  ]
+}
+```
+
+### Mastodon / Lemmy
+
+Posts from these fediverse services appear as "Notes" in your timeline.
+
+| Service | Property | Description |
+| :--- | :--- | :--- |
+| **Mastodon** | `instance` | The domain of the instance (e.g., `mastodon.social`). |
+| | `id` | The **Numeric User ID**. (Check your profile source code to find this). |
+| **Lemmy** | `instance` | The domain (e.g., `lemmy.world`). |
+| | `username` | Your username on that instance. |
+
+Example:
+
+```json
+"mastodon": {
+  "sources": [
+    {
+      "name": "social",
+      "instance": "mastodon.social",
+      "id": "109329..." // Your numeric User ID
+    }
+  ]
+}
+```
+
+### 3. Media & Reading (YouTube, Raindrop, RSS)
+
+Share what you are watching and reading automatically.
+
+| Service | Property | Description |
+| :--- | :--- | :--- |
+| **YouTube** | `channel_id` | The ID starting with `UC...`. Found in your channel URL. |
+| **Raindrop** | `collection_id` | The numeric ID of the collection. `0` is "All Bookmarks". |
+| **RSS** | `url` | Full URL to an external XML/RSS feed to ingest. |
+
+Examples:
+
+```json
+"youtube": {
+  "sources": [
+    { "name": "vlog", "channel_id": "UC_..." } // Found in your channel URL
+  ]
+},
+"raindrop": {
+  "collection_id": "0" // "0" means "All Bookmarks"
+},
+"rss": {
+  "sources": [
+    { "name": "hacker-news", "url": "https://news.ycombinator.com/rss" }
+  ]
+}
+```
+
+### 4. Code Forges (GitLab, Gitea, Bitbucket)
+If you host code elsewhere, Monolog can fetch your Release history and Tags from there, too.
+
+| Service | Property | Description |
+| :--- | :--- | :--- |
+| **GitLab** | `instance` | Default `gitlab.com`. |
+| | `id` | The numeric Project ID. |
+| **Gitea** | `instance` | The domain of your Gitea server. |
+| | `owner` | The username of the repo owner. |
+| | `repo` | The repository name. |
+| **Bitbucket** | `workspace` | The workspace ID/slug. |
+| | `repo_slug` | The repository name. |
+
+Examples:
+
+```json
+"gitlab": { "sources": [{ "name": "work", "id": "12345" }] },
+"gitea": { "instance": "git.example.com", "sources": [{ "owner": "user", "repo": "lab" }] }
+```
+
+---
+
+## 📡 Custom Feeds
+
+You probably don't want your "What I'm Reading" links cluttering your "Code Release" RSS feed. Monolog lets you generate specific feeds for specific audiences.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `type` | `string` | `"rss"` or `"atom"`. |
+| `sources` | `array` | A list of **Source Names** (defined in your service configs above). Use `["*"]` to include everything. |
+| `title` | `string` | (Optional) The title of the XML feed. Defaults to profile name. |
+| `groups` | `array` | (Optional) Filter items further by requiring them to belong to a specific Group defined in `github.groups`. |
+
+
+In `config.json`, the `feeds` block maps output files to the `name` of the sources you defined above.
+
+```json
+"feeds": {
+  // The Firehose: Everything goes here
+  "feed.xml": { "type": "rss", "sources": ["*"] },
+
+  // A specific feed for just code releases and devlog
+  "feeds/code.xml": {
+    "type": "atom",
+    "sources": ["personal", "work-code"],
+    "title": "John's Engineering Log"
+  },
+
+  // A stream of just your social media posts
+  "feeds/stream.xml": {
+    "type": "rss",
+    "sources": ["social-bluesky", "youtube-vlog"],
+    "title": "John's Social Stream"
+  }
+}
+```
+
+---
+
+## 🔑 Secrets & Keys
+
+To keep your config file safe to commit, sensitive keys are stored in environment variables.
+
+1.  **Locally:** Create a `.env` file.
+2.  **GitHub Actions:** Go to **Settings > Secrets and variables > Actions** and add them there.
+
+| Key | Required? | Description |
+| :--- | :--- | :--- |
+| `GH_TOKEN` | **Yes** | A GitHub Personal Access Token (Classic). Needs `repo` and `read:discussion` scopes. Used for GraphQL queries. |
+| `RAINDROP_TOKEN` | No | Required if using Raindrop. Get a "Test Token" from your Raindrop settings. |
+| `GITLAB_TOKEN` | No | Personal Access Token (read_api) for private GitLab repos. |
+| `GITEA_TOKEN` | No | Access Token for Gitea. |
+| `BITBUCKET_APP_PASS` | No | App Password for Bitbucket (use username in config). |
+
+---
+
+## 🎨 Theming
+
+The visual theme is completely decoupled from the build logic. It lives inside `index.liquid`.
+
+Monolog's default template uses **OKLCH** colors for perceptual uniformity. To change the theme, simply edit the CSS variables in the `<style>` block of `index.liquid`.
+
+**Dark Mode?**
+It is handled automatically by the browser (`prefers-color-scheme`). If you want to tweak the dark mode colors, look for the `@media (prefers-color-scheme: dark)` block in the template.
+
+---
+
+## 🤖 Automatic Deployment
+
+You don't need to manually build the site, use a GitHub Action!
+
+To enable Github Pages, go to `Settings > Pages`, and set the Source to **GitHub Actions** then add/edit the workflow:
+
+```yaml
+name: Deploy Monolog
 
 on:
-  # Every 2 hours
   schedule:
-    - cron: '0 0/2 * * *'
-  # Run when you push changes to config or template
+    - cron: '0 */4 * * *' # Updates every 4 hours
   push:
     branches: [ main ]
-  # Allow manual run button in GitHub UI
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -45,26 +330,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install Dependencies
-        run: npm install node-fetch@2 markdown-it rss dotenv rss rss-parser node-emoji@1
-
-      - name: Run Build Script
+      - run: npm install
+      - run: node build.js
         env:
-          # GITHUB_TOKEN is automatically provided by Actions
-          # We use it to fetch your discussions/releases
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node build.js
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          # Add other tokens here if needed
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
 
@@ -75,183 +350,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
 ```
 
 ---
 
-## ⚙️ Configuration (`config.json`)
-
-### `profile`
-Controls the header, footer, and SEO meta tags.
-
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `name` | string | Displayed in the header and `<title>`. |
-| `tagline` | string | Displayed below the name and in meta description. |
-| `url` | string | The production URL (used for canonical links/RSS). |
-| `email` | string | Displayed in footer. |
-| `og_image` | string | Absolute URL to an image used for Twitter/OpenGraph cards. |
-| `copyright_start`| string | Year to start the copyright range (e.g., "2023"). |
-| `socials` | array | List of objects `{ "name": "...", "url": "..." }` to display in the footer. |
-
-### `analytics`
-Supports privacy-friendly analytics out of the box.
-
-| Provider | Config Keys | Description |
-| :--- | :--- | :--- |
-| **plausible** | `enabled` (bool), `domain`, `src` | Injects the Plausible tracking script. |
-| **cloudflare** | `enabled` (bool), `token` | Injects the Cloudflare Web Analytics beacon. |
-
----
-
-### `github` (Source)
-The core engine. Fetches Discussions, Issues, and Releases via GraphQL.
-
-**`sources` array options:**
-| Property | Required | Description |
-| :--- | :--- | :--- |
-| `name` | **Yes** | Internal ID used for generating specific RSS feeds later. |
-| `owner` | **Yes** | The Github username or Organization name. |
-| `repos` | **Yes** | Array of repository names to fetch from. |
-| `discussions` | No | `true`/`false` (Default: `true`). Fetch blog posts/notes. |
-| `releases` | No | `true`/`false` (Default: `true`). Fetch releases/tags. |
-| `issues` | No | `true`/`false` (Default: `false`). Fetch issue activity. |
-
-**Other Options:**
-*   `groups`: Maps specific repositories to a "Topic" tag in the filter bar. Useful for grouping multiple micro-services under one project name.
-*   `tag_overrides`: A dictionary to fix tag casing (e.g., convert the slug "ios" to display "iOS").
-
-**Example:**
-```json
-"github": {
-  "sources": [
-    {
-      "name": "personal",
-      "owner": "johndoe",
-      "repos": ["blog"],
-      "discussions": true
-    },
-    {
-      "name": "work",
-      "owner": "acme-corp",
-      "repos": ["backend-api"],
-      "discussions": false,
-      "releases": true
-    }
-  ],
-  "groups": {
-    "Infrastructure": ["johndoe/dotfiles", "backend-api"]
-  },
-  "tag_overrides": { "api": "API", "css": "CSS" }
-}
-```
-
----
-
-### `bluesky` (Source)
-Fetches posts from Bluesky as "Notes".
-
-**`sources` array options:**
-| Property | Description |
-| :--- | :--- |
-| `name` | Internal ID for RSS filtering. |
-| `handle` | Your Bluesky handle (e.g., `user.bsky.social`). |
-| `feed` | *(Optional)* A custom feed URI (e.g., `at://did:plc:...`). If omitted, fetches the user's author feed. |
-
----
-
-### `mastodon` / `lemmy` (Fediverse)
-Fetches toots/posts from any compatible instance.
-
-| Service | Config Keys | Description |
-| :--- | :--- | :--- |
-| **mastodon** | `instance`, `id` | Numeric User ID required. |
-| **lemmy** | `instance`, `username` | Fetches user posts/comments. |
-
----
-
-### `youtube` (Source)
-Fetches recent videos.
-
-**`sources` array options:**
-| Property | Description |
-| :--- | :--- |
-| `name` | Internal ID for RSS filtering. |
-| `channel_id` | The ID starting with `UC...`. |
-
----
-
-### `raindrop` (Source)
-Fetches bookmarks from Raindrop.io collections.
-
-| Property | Description |
-| :--- | :--- |
-| `collection_id` | The numeric ID of the collection. `0` is "All Bookmarks". |
-
----
-
-### `rss` (Source)
-Ingest external RSS or Atom feeds (e.g., Substack, Medium, Blogs).
-
-**`sources` array options:**
-| Property | Description |
-| :--- | :--- |
-| `name` | Internal ID for filtering and tag generation. |
-| `url` | The full URL to the `.xml` or `.rss` feed. |
-
----
-
-### `gitlab` / `gitea` / `bitbucket` (Sources)
-Fetch releases/tags from other git forges.
-
-| Service | Config Keys | Description |
-| :--- | :--- | :--- |
-| **gitlab** | `instance` (default `gitlab.com`), `id` (Project ID) | Fetch releases for a specific project ID. |
-| **gitea** | `instance` (domain), `owner`, `repo` | Fetch releases from a Gitea repo. |
-| **bitbucket** | `workspace`, `repo_slug` | Fetch tags from a Bitbucket repo. |
-
----
-
-### `feeds` (Output)
-Define exactly which content goes into which RSS/Atom feed file.
-
-**Example:**
-```json
-"feeds": {
-  // The Master Feed (Everything)
-  "feed.xml": { "type": "rss", "sources": ["*"] },
-
-  // Code Only (No social posts)
-  "feeds/code.xml": {
-    "type": "atom",
-    "sources": ["personal", "work"], // Matches 'name' in github/gitlab config
-    "title": "John's Code Releases"
-  }
-}
-```
-
----
-
-## 🔑 Secrets & Environment Variables
-
-Create a `.env` file in the root directory for local development. In Github Actions, add these to **Settings > Secrets and variables > Actions**.
-
-*   `GH_TOKEN`: (Required) Github Personal Access Token.
-*   `RAINDROP_TOKEN`: (Optional) For Raindrop.
-*   `GITLAB_TOKEN`, `GITEA_TOKEN`, `BITBUCKET_APP_PASS`: (Optional) For private repos.
-
-## 📝 Writing Content
-
-*   **Blog Post:** Github Discussion -> Category "General".
-*   **Note:** Github Discussion -> Category "Notes".
-*   **Now Page:** Github Discussion -> Category "Now".
-*   **Draft:** Github Discussion -> Category "Drafts".
-
 ## License
 
-You are free to use, modify, and distribute this software under the terms of the Artistic License 2.0
+You are free to use, modify, and distribute this software under the terms of the Artistic License 2.0.

@@ -1,30 +1,31 @@
 {
   "name": "monolog",
-  "version": "0.0.1",
   "description": "A headless, single-column content aggregator.",
   "main": "build.js",
+  "license": "Artistic-2.0",
   "scripts": {
     "build": "node build.js"
   },
   "dependencies": {
-    "dotenv": "^16.6.1",
+    "dotenv": "^16.3.1",
+    "liquidjs": "^10.10.0",
     "markdown-it": "^13.0.2",
+    "markdown-it-emoji": "^2.0.2",
     "node-emoji": "^1.11.0",
     "node-fetch": "^2.7.0",
     "rss": "^1.2.2",
     "rss-parser": "^3.13.0"
   },
+  "version": "0.0.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sanko/monolog.git"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/sanko/monolog/issues"
   },
-  "homepage": "https://github.com/sanko/monolog#readme",
-  "devDependencies": {}
+  "homepage": "https://github.com/sanko/monolog#readme"
 }

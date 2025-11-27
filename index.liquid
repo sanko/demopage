@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{{ profile.name }}</title>
+    <meta name="description" content="{{ profile.tagline }}">
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{ profile.name }}">
+    <meta property="og:description" content="{{ profile.tagline }}">
+    <meta property="og:url" content="{{ profile.url }}">
+    {% if profile.og_image %}<meta property="og:image" content="{{ profile.og_image }}">{% endif %}
+
+    {% for feed in feeds %}<link rel="alternate" type="{{ feed.mime }}" title="{{ feed.title }}" href="{{ feed.file }}" />
+    {% endfor %}
+
+    {% if analytics.plausible.enabled %}<!-- Analytics: Plausible -->
+    <script defer data-domain="{{ analytics.plausible.domain }}" src="{{ analytics.plausible.src }}"></script>
+    {% endif %}
+    {% if analytics.cloudflare.enabled %}<!-- Analytics: Cloudflare -->
+    <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "{{ analytics.cloudflare.token }}"}'></script>
+    {% endif %}
+    <style>
+        /* THEME */
+        :root {
+            /* Colors (Light / Default) */
+            --c-paper: oklch(99% 0 0);
+            --c-table: oklch(96% 0.01 200);
+            --c-text: oklch(20% 0 0);
+            --c-sub: oklch(50% 0 0);
+            --c-accent: oklch(45% 0.24 270);
+            --c-code: oklch(45% 0.15 140);
+            --c-shadow: oklch(20% 0.02 270 / 10%);
+
+            /* Fonts */
+            --f-serif: 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, serif;
+            --f-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --f-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
+
+            /* Layout */
+            --w-content: 42rem;
+            --s-gutter: clamp(1.5rem, 5vw, 3rem);
+
+            /* Animation */
+            --trans-theme: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                           color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                           border-color 0.5s ease;
+        }
+
+        /* Dark Mode */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --c-paper: oklch(18% 0 0);
+                --c-table: oklch(14% 0 0);
+                --c-text: oklch(90% 0.01 270);
+                --c-sub: oklch(60% 0.01 270);
+                --c-accent: oklch(75% 0.14 270);
+                --c-code: oklch(80% 0.15 140);
+                --c-shadow: oklch(0% 0 0 / 50%);
+            }
+        }
+
+        /* Manual Overrides */
+        [data-theme="light"] {
+            --c-paper: oklch(99% 0 0); --c-table: oklch(96% 0.01 200); --c-text: oklch(20% 0 0);
+            --c-sub: oklch(50% 0 0); --c-accent: oklch(45% 0.24 270); --c-code: oklch(45% 0.15 140);
+            --c-shadow: oklch(20% 0.02 270 / 10%);
+        }
+        [data-theme="dark"] {
+            --c-paper: oklch(18% 0 0); --c-table: oklch(14% 0 0); --c-text: oklch(90% 0.01 270);
+            --c-sub: oklch(60% 0.01 270); --c-accent: oklch(75% 0.14 270); --c-code: oklch(80% 0.15 140);
+            --c-shadow: oklch(0% 0 0 / 50%);
+        }
+
+        /* BASE */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--c-table); color: var(--c-text); font-family: var(--f-serif); line-height: 1.5; min-height: 100dvh; transition: var(--trans-theme); }
+        input.filter-check { display: none; }
+        a { text-decoration: none; color: inherit; transition: color 0.2s; cursor: pointer; }
+        a:hover { color: var(--c-accent); }
+        .the-paper, .the-table, .theme-btn, .year-title, .dots, .entry-date, .entry-summary, .filter-tag, .note-text, .note-meta, .rel-header, .rel-msg, .meta-stat { transition: var(--trans-theme); }
+
+        /* LAYOUT */
+        .the-table { position: fixed; inset: 0; z-index: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: var(--s-gutter); pointer-events: auto; }
+        .the-paper { position: relative; z-index: 1; background-color: var(--c-paper); min-height: 100dvh; margin-bottom: 100dvh; padding: var(--s-gutter); box-shadow: 0 50px 100px -20px var(--c-shadow); display: flex; flex-direction: column; align-items: center; }
+        .paper-content { width: 100%; max-width: var(--w-content); margin-top: 4rem; margin-bottom: 6rem; }
+
+        /* HEADER */
+        header { text-align: center; margin-bottom: 2rem; }
+        h1 { font-size: 3rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+        .bio { font-family: var(--f-sans); font-size: 1rem; color: var(--c-sub); margin-bottom: 1.5rem; }
+
+        .gh-status { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.75rem; border: 1px solid color-mix(in oklch, var(--c-text), transparent 85%); border-radius: 2rem; font-family: var(--f-sans); font-size: 0.8rem; color: var(--c-sub); margin-bottom: 2rem; }
+        .gh-status.status-busy { border-color: var(--c-accent); color: var(--c-accent); }
+
+        .now-section { border: 1px solid color-mix(in oklch, var(--c-text), transparent 90%); background: color-mix(in oklch, var(--c-paper), var(--c-table) 30%); padding: 1.5rem; border-radius: 4px; margin-bottom: 4rem; position: relative; }
+        .now-label { position: absolute; top: -0.6rem; left: 1rem; background: var(--c-paper); padding: 0 0.5rem; font-family: var(--f-mono); font-size: 0.7rem; color: var(--c-accent); letter-spacing: 0.1em; font-weight: 700; }
+        .now-content { font-size: 1rem; color: var(--c-text); }
+        .now-content p { margin-bottom: 0.5rem; }
+        .now-meta { font-family: var(--f-sans); font-size: 0.7rem; color: var(--c-sub); margin-top: 1rem; text-align: right; }
+
+        .filter-interface { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+        .filter-list { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.35rem 0.75rem; max-width: 55ch; font-family: var(--f-sans); font-weight: 500; font-size: 0.8rem; color: var(--c-sub); }
+        .filter-tag { cursor: pointer; user-select: none; transition: color 0.2s; }
+        .filter-tag:hover { color: var(--c-text); }
+        .filter-tag::before { content: "[ "; opacity: 0; color: var(--c-accent); transition: opacity 0.2s; }
+        .filter-tag::after { content: " ]"; opacity: 0; color: var(--c-accent); transition: opacity 0.2s; }
+        .filter-separator { opacity: 0.3; margin: 0 0.25rem; }
+
+        .clear-container { height: 1.5rem; width: 100%; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transform: translateY(5px); transition: all 0.4s ease; }
+        .clear-container.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+        .clear-btn { font-family: var(--f-sans); font-size: 0.75rem; background: none; border: none; color: var(--c-accent); cursor: pointer; border-bottom: 1px dotted var(--c-accent); }
+        .clear-btn:hover { color: var(--c-text); border-bottom-style: solid; }
+
+        /* CSS LOGIC */
+        body:has(.filter-check:checked) .entry { opacity: 0.1; filter: grayscale(100%) blur(1px); }
+
+        /* Dynamic CSS Logic */
+        body:has(.filter-check:checked) .entry { opacity: 0.1; filter: grayscale(100%) blur(1px); }
+
+        {{ dynamic_css }}
+
+        /* ENTRY STYLES */
+        .year-block { margin-bottom: 4rem; }
+        .year-title { font-family: var(--f-sans); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; color: var(--c-text); margin-bottom: 2rem; padding-bottom: 0.25rem; display: inline-block; }
+        .entry { margin-bottom: 2.5rem; transition: opacity 0.4s ease, filter 0.4s ease; }
+
+        .entry-row { display: flex; align-items: baseline; width: 100%; gap: 0.5rem; max-width: 100%; }
+        .entry-title { font-size: 1.35rem; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
+        .entry-title:hover { text-decoration: underline; text-underline-offset: 4px; color: var(--c-accent); }
+        .dots { flex-grow: 1; border-bottom: 2px dotted var(--c-sub); opacity: 0.4; position: relative; flex-shrink: 0; min-width: 1rem; }
+        .meta-group { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
+        .meta-stat { display: flex; align-items: center; gap: 0.3em; font-family: var(--f-sans); font-size: 0.75rem; color: var(--c-sub); font-weight: 500; text-decoration: none; }
+        .meta-stat svg { width: 1em; height: 1em; stroke: currentColor; stroke-width: 2; fill: none; }
+        .entry:hover .meta-stat { color: var(--c-text); }
+        a.meta-stat:hover { color: var(--c-accent); text-decoration: underline; }
+        .entry-date { font-family: var(--f-sans); font-weight: 500; font-size: 0.85rem; color: var(--c-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .entry-summary { display: block; margin-top: 0.25rem; font-size: 0.95rem; color: var(--c-sub); max-width: 90%; line-height: 1.4; text-wrap: pretty; }
+
+        .entry.tag-not { padding-left: 1.5rem; border-left: 3px solid color-mix(in oklch, var(--c-sub), transparent 70%); margin-bottom: 3rem; }
+        .note-text { font-size: 1.1rem; line-height: 1.5; color: var(--c-text); margin-bottom: 0.5rem; font-style: italic; }
+        .note-meta { font-family: var(--f-sans); font-size: 0.75rem; color: var(--c-sub); display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;}
+        .note-link { font-weight: 600; }
+        .note-link:hover { text-decoration: underline; color: var(--c-accent); }
+        .note-media { margin-bottom: 0.75rem; border-radius: 4px; overflow: hidden; border: 1px solid color-mix(in oklch, var(--c-text), transparent 90%); }
+        .note-media img { display: block; width: 100%; height: auto; }
+
+        .entry.tag-rel { margin-bottom: 2rem; }
+        .rel-repo { font-family: var(--f-mono); font-weight: 700; font-size: 0.95rem; color: var(--c-text); }
+        .rel-version { font-family: var(--f-mono); font-size: 0.75rem; color: var(--c-accent); background: color-mix(in oklch, var(--c-accent), transparent 90%); padding: 1px 4px; border-radius: 3px; margin-left: 0.5ch; }
+        .rel-msg { font-family: var(--f-mono); font-size: 0.8rem; color: var(--c-sub); margin-top: 0.25rem; display: block; white-space: pre-wrap; }
+        .rel-repo:hover { text-decoration: underline; text-decoration-color: var(--c-accent); text-underline-offset: 3px; }
+
+        /* FOOTER */
+        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: var(--f-sans); font-weight: 900; font-size: clamp(2rem, 5vw, 4rem); color: var(--c-text); opacity: 0.03; text-align: center; width: 100%; pointer-events: none; user-select: none; text-transform: uppercase; letter-spacing: -0.02em; }
+        .footer-content { position: relative; z-index: 2; width: 100%; max-width: var(--w-content); margin-inline: auto; font-family: var(--f-sans); font-size: 0.8rem; letter-spacing: 0.02em; }
+        .copyright { font-weight: 500; color: var(--c-text); margin-bottom: 0.5rem; }
+        .controls-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem; color: var(--c-sub); }
+        .social-links { display: flex; gap: 1.5rem; }
+        .social-links a { text-decoration: none; }
+        .social-links a:hover { text-decoration: underline; text-underline-offset: 3px; color: var(--c-accent); }
+        .theme-switcher { display: flex; gap: 1rem; }
+        .theme-btn { background: none; border: none; cursor: pointer; color: inherit; font-family: inherit; font-size: inherit; padding: 0; transition: color 0.2s; text-decoration: none; }
+        .theme-btn:hover { color: var(--c-text); text-decoration: underline; text-underline-offset: 3px; }
+        .theme-btn.active { color: var(--c-accent); font-weight: 700; }
+
+        @media (max-width: 650px) {
+            .entry-row { flex-direction: column; gap: 0; }
+            .entry-title { white-space: normal; font-weight: 600; margin-bottom: 0.25rem; }
+            .dots { display: none; }
+            .meta-group { width: 100%; margin-bottom: 0.5rem; color: var(--c-sub); font-size: 0.75rem; justify-content: flex-start; }
+            .entry-date { order: 1; margin-right: auto; color: var(--c-sub); font-size: 0.75rem; }
+            .meta-stat { order: 2; font-size: 0.75rem; }
+            .entry-summary { margin-top: 0; font-size: 0.9rem; }
+            .entry.tag-not { padding-left: 1rem; border-left-width: 2px; }
+            .note-meta { gap: 0.5rem 1rem; justify-content: flex-start; }
+            .note-meta > span:not(.meta-stat) { display: none; }
+            h1 { font-size: 2.25rem; }
+            .the-table { padding-bottom: 6rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Dynamic Filter Checkboxes -->
+    {% for tag in filters %}
+    <input type="checkbox" class="filter-check" id="f-{{ tag.id }}">
+    {% endfor %}
+
+    <footer class="the-table">
+        <div class="watermark">This space intentionally<br>left blank</div>
+        <div class="footer-content">
+            <div class="copyright">{{ profile.name }} &copy; {{ year_range }}</div>
+            <div class="controls-row">
+                <nav class="social-links">
+                    {% for link in profile.socials %}
+                    <a href="{{ link.url }}">{{ link.name }}</a>
+                    {% endfor %}
+                </nav>
+                <div class="theme-switcher">
+                    <button class="theme-btn" data-set-theme="light">light</button>
+                    <button class="theme-btn" data-set-theme="dark">dark</button>
+                    <button class="theme-btn" data-set-theme="system">system</button>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <main class="the-paper">
+        <div class="paper-content">
+            <header>
+                <h1>{{ profile.name }}</h1>
+                <p class="bio">{{ profile.tagline }}</p>
+
+                {% if status %}<!-- Status -->
+                <div class="gh-status {{ status.busyClass }}">
+                    <span class="status-emoji">{{ status.emoji }}</span>
+                    <span class="status-text">{{ status.message }}</span>
+                </div>
+                {% endif %}
+
+                <div class="filter-interface">
+                    <div class="filter-list">
+                        {% for section in filter_sections %}
+                            {% for tag in section %}
+                                <label for="f-{{ tag.id }}" class="filter-tag" {% if tag.color %}style="color: var({{ tag.color }})"{% endif %}>{{ tag.name }}</label>
+                            {% endfor %}
+                            {% unless forloop.last %}<span class="filter-separator">|</span>{% endunless %}
+                        {% endfor %}
+                    </div>
+                    <div id="clear-container" class="clear-container">
+                        <button id="clear-filters" class="clear-btn">Clear Selection</button>
+                    </div>
+                </div>
+            </header>
+
+            {% if now %}<!-- Now Section -->
+            <section class="now-section">
+                <div class="now-label">NOW</div>
+                <div class="now-content">{{ now.content }}</div>
+                <div class="now-meta">Updated {{ now.date | date: "%b %d" }}</div>
+            </section>
+            {% endif %}
+
+            {% for year_group in timeline %}<!-- Timeline -->
+            <section class="year-block">
+                <h2 class="year-title">{{ year_group.year }}</h2>
+
+                {% for item in year_group.items %}
+
+                    {% if item.type == 'article' or item.type == 'note' or item.type == 'bookmark' %}<!-- Article/Note/Bookmark -->
+                    <article class="entry {{ item.tag_classes }}">
+
+                        {% if item.type == 'note' %}
+                            <!-- Note Layout -->
+                             <div class="note-text">{{ item.body | markdown }}</div>
+                             {% if item.image %}<div class="note-media"><img src="{{ item.image }}" loading="lazy"></div>{% endif %}
+                             <div class="note-meta">
+                                <time>{{ item.date | date: "%b %d" }}</time>
+
+                                <!-- Always separate Date from what comes next -->
+                                <span>&middot;</span>
+
+                                <!-- Check if any metrics exist -->
+                                {% if item.metrics.replies > 0 or item.metrics.reposts > 0 or item.metrics.likes > 0 %}
+                                    {% if item.metrics.replies > 0 %}
+                                        <a href="{{ item.url }}" class="meta-stat" title="{{ item.metrics.replies }} Replies">
+                                            <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                                            {{ item.metrics.replies }}
+                                        </a>
+                                    {% endif %}
+                                    {% if item.metrics.reposts > 0 %}
+                                        <a href="{{ item.url }}" class="meta-stat" title="{{ item.metrics.reposts }} Reposts">
+                                            <svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                                            {{ item.metrics.reposts }}
+                                        </a>
+                                    {% endif %}
+                                    {% if item.metrics.likes > 0 %}
+                                        <a href="{{ item.url }}" class="meta-stat" title="{{ item.metrics.likes }} Likes">
+                                            <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                                            {{ item.metrics.likes }}
+                                        </a>
+                                    {% endif %}
+
+                                    <!-- Separator between Metrics and Link -->
+                                    <span>&middot;</span>
+                                {% endif %}
+
+                                <a href="{{ item.url }}" class="note-link">{{ item.sourceLabel }} ↗</a>
+                            </div>
+
+                        {% elsif item.type == 'article' or item.type == 'bookmark' %}
+                            <!-- Article Layout -->
+                            <div class="entry-row">
+                                <a href="{{ item.url }}" class="entry-title">{% if item.type == 'bookmark' %}🔖 {% endif %}{{ item.title }}</a>
+                                <span class="dots"></span>
+                                <div class="meta-group">
+                                    {% if item.metrics.comments > 0 %}
+                                    <a href="{{ item.url }}#comments" class="meta-stat" title="{{ item.metrics.comments }} Comments"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg> {{ item.metrics.comments }}</a>
+                                    {% endif %}
+                                    {% if item.metrics.reactions > 0 %}
+                                    <a href="{{ item.url }}" class="meta-stat" title="{{ item.metrics.reactions }} Reactions"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke-linecap="round" stroke-linejoin="round"></path></svg> {{ item.metrics.reactions }}</a>
+                                    {% endif %}
+                                    <time class="entry-date">{{ item.date | date: "%b %d" }}</time>
+                                </div>
+                            </div>
+                            {% if item.summary %}
+                            <span class="entry-summary">{{ item.summary | markdown | strip_html | truncate: 280 }}</span>
+                            {% endif %}
+                        {% endif %}
+                    </article>
+
+                    {% elsif item.type == 'video' %}<!-- Video -->
+                    <article class="entry {{ item.tag_classes }}">
+                        <div class="note-media"><a href="{{ item.url }}"><img src="{{ item.image }}" alt="{{ item.title }}"></a></div>
+                        <div class="note-meta"><time>{{ item.date | date: "%b %d" }}</time><span>&middot;</span><a href="{{ item.url }}" class="note-link">YouTube ↗</a></div>
+                    </article>
+
+                    {% elsif item.type == 'release' %}<!-- Release -->
+                    <article class="entry {{ item.tag_classes }}">
+                        <div class="entry-row">
+                            <span>
+                                <a href="{{ item.url }}" class="rel-repo">{{ item.owner }}/{{ item.repo }}</a>
+                                <span class="rel-version">{{ item.title }}</span>
+                            </span>
+                            <span class="dots"></span>
+                            <time class="entry-date">{{ item.date | date: "%b %d" }}</time>
+                        </div>
+                        <code class="rel-msg">{{ item.body | split: "\n" | first | truncate: 100 }}</code>
+                    </article>
+
+                    {% endif %}
+
+                {% endfor %}
+            </section>
+            {% endfor %}
+        </div>
+    </main>
+
+    <script>
+        // Scripts (Theme toggle, filter logic)
+        const html = document.documentElement;
+        const themeBtns = document.querySelectorAll('[data-set-theme]');
+        const applyTheme = (theme) => {
+            themeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.setTheme === theme));
+            if (theme === 'system') { delete html.dataset.theme; localStorage.removeItem('theme'); }
+            else { html.dataset.theme = theme; localStorage.setItem('theme', theme); }
+        };
+        applyTheme(localStorage.getItem('theme') || 'system');
+        themeBtns.forEach(btn => btn.addEventListener('click', () => applyTheme(btn.dataset.setTheme)));
+
+        const checkboxes = document.querySelectorAll('.filter-check');
+        const clearContainer = document.getElementById('clear-container');
+        const clearBtn = document.getElementById('clear-filters');
+
+        const updateUI = () => {
+            const anyChecked = Array.from(checkboxes).some(box => box.checked);
+            if (anyChecked) clearContainer.classList.add('is-visible'); else clearContainer.classList.remove('is-visible');
+
+            // Update URL
+            const activeTags = [];
+            checkboxes.forEach(box => { if (box.checked) activeTags.push(box.id.replace('f-', '')); });
+            const url = new URL(window.location);
+            if (activeTags.length > 0) url.searchParams.set('tags', activeTags.join(',')); else url.searchParams.delete('tags');
+            window.history.replaceState({}, '', url);
+        };
+
+        // Load from URL
+        const params = new URLSearchParams(window.location.search);
+        const tags = params.get('tags');
+        if (tags) {
+            const activeTags = tags.split(',');
+            checkboxes.forEach(box => {
+                const tagKey = box.id.replace('f-', '');
+                if(box) box.checked = activeTags.includes(tagKey);
+            });
+        }
+        updateUI(); // Initial check
+
+        if(clearBtn) {
+            clearBtn.addEventListener('click', () => { checkboxes.forEach(box => box.checked = false); updateUI(); });
+        }
+        checkboxes.forEach(box => box.addEventListener('change', updateUI));
+    </script>
+</body>
+</html>

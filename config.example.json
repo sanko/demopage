@@ -1,20 +1,21 @@
 {
   "profile": {
-    "name": "Sanko Robinson",
-    "tagline": "Human.",
-    "url": "https://sankorobinson.com",
-    "og_image": "https://sankorobinson.com/og-card.png",
-    "email": "sanko@example.com",
+    "name": "John R. Smith",
+    "tagline": "Staff Software Engineer & Minimalist.",
+    "url": "https://example.com",
+    "og_image": "https://example.com/og-card.png",
+    "email": "johns@example.com",
     "copyright_start": "2023",
     "socials": [
-      { "name": "github", "url": "https://github.com/sanko" },
-      { "name": "bluesky", "url": "https://bsky.app/profile/sankorobinson.com" }
+      { "name": "github", "url": "https://github.com/johnsmith" },
+      { "name": "bluesky", "url": "https://bsky.app/profile/example.bsky.social" },
+      { "name": "linkedin", "url": "https://linkedin.com/in/example" }
     ]
   },
   "analytics": {
     "plausible": {
-      "enabled": false,
-      "domain": "sankorobinson.com",
+      "enabled": true,
+      "domain": "example.com",
       "src": "https://plausible.io/js/script.js"
     }
   },
@@ -22,38 +23,40 @@
     "sources": [
       {
         "name": "personal",
-        "owner": "sanko",
-        "repos": ["infix", "infix.pm"],
-        "issues": false,
-        "releases": true
-      },
-      {
-        "name": "personal",
-        "owner": "sanko",
-        "repos": ["Affix.pm"],
-        "discussions": false,
+        "owner": "johnsmith",
+        "repos": ["my-blog", "dotfiles"],
+        "discussions": true,
         "issues": false,
         "releases": true
       }
     ],
     "groups": {
-      "Infrastructure": ["sanko/dotfiles", "payment-gateway"]
+      "Infrastructure": ["johnsmith/dotfiles"]
     },
-    "tag_overrides": { "css": "CSS", "ai": "AI" }
+    "tag_overrides": { "css": "CSS", "ai": "AI", "ui": "UI", "devops": "DevOps" }
   },
   "bluesky": {
     "sources": [
-      { "name": "social", "handle": "sankorobinson.com" }
+      { "name": "social", "handle": "example.bsky.social" }
     ]
   },
-  "xxxyoutube": {
+  "youtube": {
     "sources": [
       { "name": "vlog", "channel_id": "UC_x5XG1OV2P6uZZ5FSM9Ttw" }
+    ]
+  },
+  "rss": {
+    "sources": [
+      { "name": "news", "url": "https://news.ycombinator.com/rss" }
     ]
   },
   "feeds": {
     "feed.xml": { "type": "rss", "sources": ["*"] },
     "atom.xml": { "type": "atom", "sources": ["*"] },
-    "feeds/code.xml": { "type": "atom", "sources": ["personal"], "title": "John Roberts - Code" }
+    "feeds/code.xml": {
+      "type": "atom",
+      "sources": ["personal"],
+      "title": "John Smith - Code"
+    }
   }
 }

@@ -4,168 +4,235 @@ const fetch = require('node-fetch');
 const MarkdownIt = require('markdown-it');
 const RSS = require('rss');
 const Parser = require('rss-parser');
-const emoji = require('node-emoji');
+const {
+    Liquid
+} = require('liquidjs');
 require('dotenv').config();
 
-const md = new MarkdownIt({ html: true, linkify: true });
+// SETUP
 const config = require('./config.json');
+const emojiPlugin = require('markdown-it-emoji');
 
+// Init Markdown (Handle plugin version diffs)
+const md = new MarkdownIt({
+        html: true,
+        linkify: true
+    })
+    .use(emojiPlugin.full || emojiPlugin);
+
+// Init Liquid
+const engine = new Liquid();
+engine.registerFilter('markdown', (str) => md.render(str || ''));
+
+const rssParser = new Parser();
 const slugify = txt => txt.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
-// --- STATE ---
+// State
 let githubStatus = null;
 let nowPost = null;
 
-// --- TAG MAP ---
+// Tag Map
 const tagDisplayMap = {
-    'notes': 'Notes', 'commits': 'Commits', 'bluesky': 'Bluesky',
-    'video': 'Video', 'bookmark': 'Reading', 'social': 'Social', 'rss': 'RSS',
-    'mastodon': 'Mastodon', 'lemmy': 'Lemmy'
+    'notes': 'Notes',
+    'commits': 'Commits',
+    'bluesky': 'Bluesky',
+    'video': 'Video',
+    'bookmark': 'Reading',
+    'social': 'Social',
+    'rss': 'RSS',
+    'mastodon': 'Mastodon',
+    'lemmy': 'Lemmy'
 };
 if (config.github?.tag_overrides) {
     Object.assign(tagDisplayMap, config.github.tag_overrides);
 }
 
-// --- FETCHERS ---
+// FETCHERS
+function getPrimaryGitHubUser() {
+    if (config.profile.github_username) return config.profile.github_username;
+    if (config.profile.socials) {
+        const ghLink = config.profile.socials.find(s => s.name.toLowerCase() === 'github');
+        if (ghLink && ghLink.url) return ghLink.url.replace(/\/$/, '').split('/').pop();
+    }
+    return null;
+}
 
 async function fetchGitHub() {
-  if (!config.github?.sources) return [];
-  console.log('Fetching GitHub...');
+    if (!config.github?.sources) return [];
+    console.log('Fetching GitHub...');
 
-  // 1. Get your username from the profile config
-  const primaryUser = getPrimaryGitHubUser();
+    const primaryUser = getPrimaryGitHubUser();
+    const pagesRepo = primaryUser ? `${primaryUser}/${primaryUser}.github.io` : null;
 
-  // 2. Update Query to fetch specific User
-  const query = `query($owner: String!, $name: String!, $user: String!) {
-      user(login: $user) {
-        status { emoji, message, indicatesLimitedAvailability }
-      }
+    const query = `query($owner: String!, $name: String!, $user: String!) {
+      user(login: $user) { status { emoji, message, indicatesLimitedAvailability } }
       repository(owner: $owner, name: $name) {
-        discussions(first: 20, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { title, url, createdAt, body, author { login }, category { name }, labels(first: 3) { nodes { name } }, comments { totalCount }, reactions { totalCount } } }
-        issues(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { title, url, createdAt, body, author { login }, labels(first: 3) { nodes { name } }, comments { totalCount }, reactions { totalCount } } }
+        discussions(first: 20, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { title, url, createdAt, body, author { login }, category { name }, labels(first: 5) { nodes { name } }, comments { totalCount }, reactions { totalCount } } }
+        issues(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { title, url, createdAt, body, author { login }, labels(first: 5) { nodes { name } }, comments { totalCount }, reactions { totalCount } } }
         releases(first: 5, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { tagName, url, publishedAt, description, name } }
       }
     }`;
 
-  const allData = [];
+    const allData = [];
 
-  for (const source of config.github.sources) {
-    const enableDiscussions = source.discussions !== false;
-    const enableIssues = source.issues === true;
-    const enableReleases = source.releases !== false;
+    for (const source of config.github.sources) {
+        const enableDiscussions = source.discussions !== false;
+        const enableIssues = source.issues === true;
+        const enableReleases = source.releases !== false;
 
-    for (const repo of source.repos) {
-      try {
-        const res = await fetch('https://api.github.com/graphql', {
-          method: 'POST',
-          headers: { 'Authorization': `bearer ${process.env.GH_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-              query,
-              variables: {
-                  owner: source.owner,
-                  name: repo,
-                  user: primaryUser || source.owner
-              }
-          })
-        });
-        const json = await res.json();
-        if (!json.data) continue;
+        for (const repo of source.repos) {
+            try {
+                const res = await fetch('https://api.github.com/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `bearer ${process.env.GH_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query,
+                        variables: {
+                            owner: source.owner,
+                            name: repo,
+                            user: primaryUser || source.owner
+                        }
+                    })
+                });
+                const json = await res.json();
+                if (!json.data) continue;
 
-        // Capture Status
-        if (!githubStatus && json.data.user?.status) {
-            githubStatus = json.data.user.status;
-        }
+                if (!githubStatus && json.data.user?.status) githubStatus = json.data.user.status;
 
-        const { discussions, issues, releases } = json.data.repository;
-        const repoSlug = slugify(repo);
-        if (!tagDisplayMap[repoSlug]) tagDisplayMap[repoSlug] = repo;
+                const {
+                    discussions,
+                    issues,
+                    releases
+                } = json.data.repository;
+                const repoSlug = slugify(repo);
+                const fullRepoName = `${source.owner}/${repo}`;
+                if (!tagDisplayMap[repoSlug]) tagDisplayMap[repoSlug] = repo;
 
-        const pushItem = (item, type, tags) => {
-            const groups = [];
-            const fullName = `${source.owner}/${repo}`;
-            if (config.github.groups) {
-                for (const [gName, rList] of Object.entries(config.github.groups)) {
-                    if (rList.includes(fullName) || rList.includes(repo)) {
-                        const gSlug = slugify(gName);
-                        groups.push(gSlug);
-                        if (!tagDisplayMap[gSlug]) tagDisplayMap[gSlug] = gName;
+                const pushItem = (item, type, tags) => {
+                    const groups = [];
+                    const fullName = `${source.owner}/${repo}`;
+                    if (config.github.groups) {
+                        for (const [gName, rList] of Object.entries(config.github.groups)) {
+                            if (rList.includes(fullName) || rList.includes(repo)) {
+                                const gSlug = slugify(gName);
+                                groups.push(gSlug);
+                                if (!tagDisplayMap[gSlug]) tagDisplayMap[gSlug] = gName;
+                            }
+                        }
                     }
+
+                    allData.push({
+                        sourceName: source.name,
+                        type: type,
+                        service: 'github',
+                        owner: source.owner,
+                        repo: repo,
+                        date: new Date(item.createdAt || item.publishedAt),
+                        title: item.title || item.name || item.tagName,
+                        url: item.url,
+                        body: item.body || item.description || "",
+                        tags: [...new Set([...tags, ...groups])],
+                        metrics: {
+                            comments: item.comments?.totalCount || 0,
+                            reactions: item.reactions?.totalCount || 0
+                        }
+                    });
+                };
+
+                if (enableDiscussions && discussions) {
+                    discussions.nodes.forEach(d => {
+                        if (pagesRepo && fullRepoName === pagesRepo && d.category.name.toLowerCase() === 'announcements') {
+                            const date = new Date(d.createdAt);
+                            if (!nowPost || date > nowPost.date) nowPost = {
+                                body: d.body,
+                                date: date
+                            };
+                            return;
+                        }
+                        if (d.category.name.toLowerCase() === 'now') {
+                            const date = new Date(d.createdAt);
+                            if (!nowPost || date > nowPost.date) nowPost = {
+                                body: d.body,
+                                date: date
+                            };
+                            return;
+                        }
+                        if (d.category.name.toLowerCase() === 'drafts') return;
+
+                        const isNote = d.category.name.toLowerCase() === 'notes';
+                        const tags = [repoSlug];
+                        d.labels.nodes.forEach(l => {
+                            const lSlug = slugify(l.name).substring(0, 3);
+                            tags.push(lSlug);
+                            if (!tagDisplayMap[lSlug] && !config.github.tag_overrides?.[lSlug]) {
+                                tagDisplayMap[lSlug] = l.name.toUpperCase().substring(0, 3);
+                            }
+                        });
+                        pushItem(d, isNote ? 'note' : 'article', tags);
+                    });
                 }
+
+                if (enableIssues && issues) {
+                    issues.nodes.forEach(i => {
+                        const tags = [repoSlug, 'issue'];
+                        i.labels.nodes.forEach(l => tags.push(slugify(l.name).substring(0, 3)));
+                        pushItem(i, 'article', tags);
+                    });
+                }
+
+                if (enableReleases && releases) {
+                    releases.nodes.forEach(r => {
+                        pushItem(r, 'release', ['commits', repoSlug]);
+                    });
+                }
+            } catch (e) {
+                console.error(`GH Error ${repo}:`, e.message);
             }
-            allData.push({
-                sourceName: source.name,
-                type: type, service: 'github', owner: source.owner, repo: repo,
-                date: new Date(item.createdAt || item.publishedAt),
-                title: item.title || item.name || item.tagName,
-                url: item.url,
-                body: item.body || item.description || "",
-                tags: [...new Set([...tags, ...groups])],
-                metrics: { comments: item.comments?.totalCount || 0, reactions: item.reactions?.totalCount || 0 }
-            });
-        };
-
-        if (enableDiscussions && discussions) {
-            discussions.nodes.forEach(d => {
-                if (primaryUser && d.author.login !== primaryUser && d.author.login !== source.owner) return;
-                if (d.category.name.toLowerCase() === 'now') {
-                    const date = new Date(d.createdAt);
-                    if (!nowPost || date > nowPost.date) nowPost = { body: d.body, date: date, url: d.url };
-                    return;
-                }
-                if (d.category.name.toLowerCase() === 'drafts') return;
-                const isNote = d.category.name.toLowerCase() === 'notes';
-                const tags = [repoSlug];
-                d.labels.nodes.forEach(l => tags.push(slugify(l.name).substring(0,3)));
-                pushItem(d, isNote ? 'note' : 'article', tags);
-            });
         }
-
-        if (enableIssues && issues) {
-            issues.nodes.forEach(i => {
-                const tags = [repoSlug, 'issue'];
-                i.labels.nodes.forEach(l => tags.push(slugify(l.name).substring(0,3)));
-                pushItem(i, 'article', tags);
-            });
-        }
-
-        if (enableReleases && releases) {
-            releases.nodes.forEach(r => pushItem(r, 'release', ['commits', repoSlug]));
-        }
-      } catch (e) { console.error(`GH Error ${repo}:`, e.message); }
     }
-  }
-  return allData;
+    return allData;
 }
 
 async function fetchBluesky() {
-  if (!config.bluesky?.sources) return [];
-  console.log('Fetching Bluesky...');
-  const allData = [];
-  for (const source of config.bluesky.sources) {
-    try {
-      let url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${source.handle}&filter=posts_no_replies&limit=20`;
-      if (source.feed) url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getFeed?feed=${source.feed}&limit=20`;
+    if (!config.bluesky?.sources) return [];
+    console.log('Fetching Bluesky...');
+    const allData = [];
+    for (const source of config.bluesky.sources) {
+        try {
+            let url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${source.handle}&filter=posts_no_replies&limit=20`;
+            if (source.feed) url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getFeed?feed=${source.feed}&limit=20`;
 
-      const res = await fetch(url);
-      const json = await res.json();
-      if (!json.feed) continue;
-      json.feed.forEach(item => {
-        const post = item.post;
-        let imageUrl = post.embed?.images?.[0]?.fullsize || null;
-        allData.push({
-          sourceName: source.name,
-          type: 'note', service: 'bluesky',
-          date: new Date(post.record.createdAt),
-          body: post.record.text,
-          url: `https://bsky.app/profile/${post.author.handle}/post/${post.uri.split('/').pop()}`,
-          image: imageUrl,
-          tags: ['notes'],
-          metrics: { replies: post.replyCount, reposts: post.repostCount, likes: post.likeCount }
-        });
-      });
-    } catch (e) { console.error(`Bluesky Error ${source.handle}:`, e.message); }
-  }
-  return allData;
+            const res = await fetch(url);
+            const json = await res.json();
+            if (!json.feed) continue;
+
+            json.feed.forEach(item => {
+                const post = item.post;
+                let imageUrl = post.embed?.images?.[0]?.fullsize || null;
+                allData.push({
+                    sourceName: source.name,
+                    type: 'note',
+                    service: 'bluesky',
+                    date: new Date(post.record.createdAt),
+                    body: post.record.text,
+                    url: `https://bsky.app/profile/${post.author.handle}/post/${post.uri.split('/').pop()}`,
+                    image: imageUrl,
+                    tags: ['notes'],
+                    metrics: {
+                        replies: post.replyCount || 0,
+                        reposts: post.repostCount || 0,
+                        likes: post.likeCount || 0
+                    }
+                });
+            });
+        } catch (e) {
+            console.error(`Bluesky Error ${source.handle}:`, e.message);
+        }
+    }
+    return allData;
 }
 
 async function fetchMastodon() {
@@ -181,16 +248,23 @@ async function fetchMastodon() {
                 let imageUrl = post.media_attachments?.[0]?.url || null;
                 allData.push({
                     sourceName: source.name,
-                    type: 'note', service: 'mastodon',
+                    type: 'note',
+                    service: 'mastodon',
                     date: new Date(post.created_at),
                     body: post.content.replace(/<[^>]*>?/gm, ''),
                     url: post.url,
                     image: imageUrl,
                     tags: ['notes'],
-                    metrics: { replies: post.replies_count, reposts: post.reblogs_count, likes: post.favourites_count }
+                    metrics: {
+                        replies: post.replies_count,
+                        reposts: post.reblogs_count,
+                        likes: post.favourites_count
+                    }
                 });
             });
-        } catch (e) { console.error(`Mastodon Error:`, e.message); }
+        } catch (e) {
+            console.error(`Mastodon Error:`, e.message);
+        }
     }
     return allData;
 }
@@ -207,16 +281,22 @@ async function fetchLemmy() {
                 json.person_view.posts.forEach(p => {
                     allData.push({
                         sourceName: source.name,
-                        type: 'note', service: 'lemmy',
+                        type: 'note',
+                        service: 'lemmy',
                         date: new Date(p.post.published),
                         body: p.post.body || p.post.name,
                         url: p.post.ap_id,
                         tags: ['social'],
-                        metrics: { likes: p.counts.score, replies: p.counts.comments }
+                        metrics: {
+                            likes: p.counts.score,
+                            replies: p.counts.comments
+                        }
                     });
                 });
             }
-        } catch (e) { console.error('Lemmy Error:', e.message); }
+        } catch (e) {
+            console.error('Lemmy Error:', e.message);
+        }
     }
     return allData;
 }
@@ -226,17 +306,22 @@ async function fetchRaindrop() {
     console.log('Fetching Raindrop...');
     try {
         const res = await fetch(`https://api.raindrop.io/rest/v1/raindrops/${config.raindrop.collection_id}`, {
-            headers: { 'Authorization': `Bearer ${process.env.RAINDROP_TOKEN}` }
+            headers: {
+                'Authorization': `Bearer ${process.env.RAINDROP_TOKEN}`
+            }
         });
         const json = await res.json();
         if (!json.items) return [];
         return json.items.map(item => ({
             sourceName: config.raindrop.name || 'bookmarks',
-            type: 'bookmark', service: 'raindrop',
+            type: 'bookmark',
+            service: 'raindrop',
             date: new Date(item.created),
-            title: item.title, url: item.link,
+            title: item.title,
+            url: item.link,
             body: item.note || "",
-            tags: ['bookmark', ...item.tags]
+            tags: ['bookmark', ...item.tags],
+            metrics: {}
         }));
     } catch (e) {
         console.error('Raindrop Error:', e.message);
@@ -245,42 +330,50 @@ async function fetchRaindrop() {
 }
 
 async function fetchYouTube() {
-  if (!config.youtube?.sources) return [];
-  console.log('Fetching YouTube...');
-  const allData = [];
-  const parser = new Parser();
+    if (!config.youtube?.sources) return [];
+    console.log('Fetching YouTube...');
+    const allData = [];
 
-  for (const source of config.youtube.sources) {
-      try {
-          const feed = await parser.parseURL(`https://www.youtube.com/feeds/videos.xml?channel_id=${source.channel_id}`);
-          feed.items.forEach(item => {
-              allData.push({
-                  sourceName: source.name,
-                  type: 'video', service: 'youtube',
-                  date: new Date(item.pubDate), title: item.title, url: item.link, body: "",
-                  image: `https://i.ytimg.com/vi/${item.id.split(':')[2]}/hqdefault.jpg`,
-                  tags: ['video']
-              });
-          });
-      } catch (e) { console.error('YT Error:', e.message); }
-  }
-  return allData;
+    for (const source of config.youtube.sources) {
+        try {
+            const feed = await rssParser.parseURL(`https://www.youtube.com/feeds/videos.xml?channel_id=${source.channel_id}`);
+            feed.items.forEach(item => {
+                const mediaGroup = item['media:group'];
+                const thumb = mediaGroup ? mediaGroup['media:thumbnail'][0].$.url : null;
+                allData.push({
+                    sourceName: source.name,
+                    type: 'video',
+                    service: 'youtube',
+                    date: new Date(item.pubDate),
+                    title: item.title,
+                    url: item.link,
+                    body: "",
+                    image: thumb,
+                    tags: ['video']
+                });
+            });
+        } catch (e) {
+            console.error('YT Error:', e.message);
+        }
+    }
+    return allData;
 }
 
 async function fetchRSS() {
     if (!config.rss?.sources) return [];
     console.log('Fetching RSS...');
     const allData = [];
-    const parser = new Parser();
     for (const source of config.rss.sources) {
         try {
-            const feed = await parser.parseURL(source.url);
+            const feed = await rssParser.parseURL(source.url);
             feed.items.slice(0, 10).forEach(item => {
                 const bodyText = (item.contentSnippet || item.content || "").trim();
                 allData.push({
                     sourceName: source.name,
-                    type: 'article', service: 'rss',
-                    owner: source.name, repo: 'feed',
+                    type: 'article',
+                    service: 'rss',
+                    owner: source.name,
+                    repo: 'feed',
                     date: new Date(item.pubDate || item.isoDate),
                     title: item.title,
                     url: item.link,
@@ -289,7 +382,9 @@ async function fetchRSS() {
                     metrics: {}
                 });
             });
-        } catch (e) { console.error(`RSS Error ${source.name}:`, e.message); }
+        } catch (e) {
+            console.error(`RSS Error ${source.name}:`, e.message);
+        }
     }
     return allData;
 }
@@ -300,16 +395,22 @@ async function fetchGitLab() {
     const allData = [];
     for (const source of config.gitlab.sources) {
         try {
-            const headers = process.env.GITLAB_TOKEN ? { 'PRIVATE-TOKEN': process.env.GITLAB_TOKEN } : {};
-            const res = await fetch(`https://${config.gitlab.instance || 'gitlab.com'}/api/v4/projects/${source.id}/releases`, { headers });
+            const headers = process.env.GITLAB_TOKEN ? {
+                'PRIVATE-TOKEN': process.env.GITLAB_TOKEN
+            } : {};
+            const res = await fetch(`https://${config.gitlab.instance || 'gitlab.com'}/api/v4/projects/${source.id}/releases`, {
+                headers
+            });
             const json = await res.json();
-            if(!Array.isArray(json)) continue;
+            if (!Array.isArray(json)) continue;
 
             json.forEach(r => {
                 allData.push({
                     sourceName: source.name,
-                    type: 'release', service: 'gitlab',
-                    owner: 'gitlab', repo: source.id,
+                    type: 'release',
+                    service: 'gitlab',
+                    owner: 'gitlab',
+                    repo: source.id,
                     date: new Date(r.released_at),
                     title: r.name,
                     version: r.tag_name,
@@ -318,7 +419,9 @@ async function fetchGitLab() {
                     tags: ['commits']
                 });
             });
-        } catch (e) { console.error('GitLab Error:', e.message); }
+        } catch (e) {
+            console.error('GitLab Error:', e.message);
+        }
     }
     return allData;
 }
@@ -329,15 +432,21 @@ async function fetchGitea() {
     const allData = [];
     for (const source of config.gitea.sources) {
         try {
-            const headers = process.env.GITEA_TOKEN ? { 'Authorization': `token ${process.env.GITEA_TOKEN}` } : {};
-            const res = await fetch(`https://${config.gitea.instance}/api/v1/repos/${source.owner}/${source.repo}/releases?limit=5`, { headers });
+            const headers = process.env.GITEA_TOKEN ? {
+                'Authorization': `token ${process.env.GITEA_TOKEN}`
+            } : {};
+            const res = await fetch(`https://${config.gitea.instance}/api/v1/repos/${source.owner}/${source.repo}/releases?limit=5`, {
+                headers
+            });
             const json = await res.json();
-            if(!Array.isArray(json)) continue;
+            if (!Array.isArray(json)) continue;
             json.forEach(r => {
                 allData.push({
                     sourceName: source.name,
-                    type: 'release', service: 'gitea',
-                    owner: source.owner, repo: source.repo,
+                    type: 'release',
+                    service: 'gitea',
+                    owner: source.owner,
+                    repo: source.repo,
                     date: new Date(r.published_at),
                     version: r.tag_name,
                     url: r.html_url,
@@ -345,7 +454,9 @@ async function fetchGitea() {
                     tags: ['commits', slugify(source.repo)]
                 });
             });
-        } catch (e) { console.error('Gitea Error:', e.message); }
+        } catch (e) {
+            console.error('Gitea Error:', e.message);
+        }
     }
     return allData;
 }
@@ -356,16 +467,22 @@ async function fetchBitbucket() {
     const allData = [];
     for (const source of config.bitbucket.sources) {
         try {
-            const headers = process.env.BITBUCKET_APP_PASS ? { 'Authorization': `Basic ${Buffer.from(`${config.bitbucket.username}:${process.env.BITBUCKET_APP_PASS}`).toString('base64')}` } : {};
-            const res = await fetch(`https://api.bitbucket.org/2.0/repositories/${source.workspace}/${source.repo_slug}/refs/tags?sort=-target.date`, { headers });
+            const headers = process.env.BITBUCKET_APP_PASS ? {
+                'Authorization': `Basic ${Buffer.from(`${config.bitbucket.username}:${process.env.BITBUCKET_APP_PASS}`).toString('base64')}`
+            } : {};
+            const res = await fetch(`https://api.bitbucket.org/2.0/repositories/${source.workspace}/${source.repo_slug}/refs/tags?sort=-target.date`, {
+                headers
+            });
             const json = await res.json();
-            if(!json.values) continue;
+            if (!json.values) continue;
 
             json.values.slice(0, 5).forEach(tag => {
                 allData.push({
                     sourceName: source.name,
-                    type: 'release', service: 'bitbucket',
-                    owner: source.workspace, repo: source.repo_slug,
+                    type: 'release',
+                    service: 'bitbucket',
+                    owner: source.workspace,
+                    repo: source.repo_slug,
                     date: new Date(tag.target.date),
                     version: tag.name,
                     url: tag.links.html.href,
@@ -373,231 +490,204 @@ async function fetchBitbucket() {
                     tags: ['commits', slugify(source.repo_slug)]
                 });
             });
-        } catch (e) { console.error('Bitbucket Error:', e.message); }
+        } catch (e) {
+            console.error('Bitbucket Error:', e.message);
+        }
     }
     return allData;
 }
 
-// --- HELPERS ---
+// DATA PREPARATION FOR LIQUID
 
-function getPrimaryGitHubUser() {
-    if (config.profile.github_username) return config.profile.github_username;
-    if (config.profile.socials) {
-        const ghLink = config.profile.socials.find(s => s.name.toLowerCase() === 'github');
-        if (ghLink && ghLink.url) return ghLink.url.replace(/\/$/, '').split('/').pop();
-    }
-    return null;
-}
+function prepareTemplateData(allContent, uniqueTags) {
+    // 1. Format Tags for Filter List (Grouped)
+    const types = ['notes', 'commits', 'video', 'bookmark', 'rss'];
+    const knownRepos = config.github?.sources ? config.github.sources.flatMap(s => s.repos.map(r => slugify(r))) : [];
+    const knownGroups = config.github?.groups ? Object.keys(config.github.groups).map(g => slugify(g)) : [];
 
-function generateHead() {
-    const p = config.profile;
-    const a = config.analytics || {};
-    let head = `<title>${p.name}</title><meta name="description" content="${p.tagline}">`;
-    head += `<meta property="og:type" content="website"><meta property="og:title" content="${p.name}"><meta property="og:description" content="${p.tagline}"><meta property="og:url" content="${p.url}">`;
-    if (p.og_image) head += `<meta property="og:image" content="${p.og_image}">`;
+    const groups = {
+        types: [],
+        repos: [],
+        groups: [],
+        topics: []
+    };
 
-    if (config.feeds) {
-        Object.keys(config.feeds).forEach(filename => {
-            const f = config.feeds[filename];
-            const mime = f.type === 'atom' ? 'application/atom+xml' : 'application/rss+xml';
-            head += `<link rel="alternate" type="${mime}" title="${filename}" href="/${filename}" />`;
+    Array.from(uniqueTags).forEach(tag => {
+        const name = tagDisplayMap[tag] || tag;
+        const item = {
+            id: tag,
+            name: name
+        };
+
+        if (types.includes(tag)) {
+            item.color = '--c-accent';
+            groups.types.push(item);
+        } else if (knownRepos.includes(tag)) groups.repos.push(item);
+        else if (knownGroups.includes(tag)) groups.groups.push(item);
+        else groups.topics.push(item);
+    });
+
+    // Create nested array for the template loop (handling separators logic)
+    const filter_sections = [];
+    if (groups.types.length) filter_sections.push(groups.types);
+    if (groups.groups.length) filter_sections.push(groups.groups.sort((a, b) => a.name.localeCompare(b.name)));
+    if (groups.repos.length) filter_sections.push(groups.repos.sort((a, b) => a.name.localeCompare(b.name)));
+    if (groups.topics.length) filter_sections.push(groups.topics.sort((a, b) => a.name.localeCompare(b.name)));
+
+    // 2. Generate Dynamic CSS
+    let dynamic_css = '';
+    uniqueTags.forEach(tag => {
+        const id = `f-${tag}`;
+        dynamic_css += `body:has(#${id}:checked) label[for="${id}"] { color: var(--c-text); font-weight: 800; }\n`;
+        dynamic_css += `body:has(#${id}:checked) label[for="${id}"]::before, body:has(#${id}:checked) label[for="${id}"]::after { opacity: 1; }\n`;
+        dynamic_css += `body:has(#${id}:checked) .entry.tag-${tag} { opacity: 1; filter: none; }\n`;
+    });
+
+    // 3. Group Content by Year
+    const timeline = [];
+    const byYear = {};
+    allContent.forEach(item => {
+        const year = item.date.getFullYear();
+        if (!byYear[year]) byYear[year] = [];
+
+        // Pre-calculate display properties for template
+        item.dateStr = item.date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric'
         });
+        item.tag_classes = item.tags.map(t => `tag-${t}`).join(' ');
+
+        // Summarize for Articles
+        if (item.type === 'article' && item.body) {
+            const rawBody = item.body.split('\n').filter(l => l.length && !l.startsWith('#'))[0] || "";
+            item.summary = md.render(rawBody).replace(/<[^>]*>?/gm, '');
+        }
+
+        item.sourceLabel = item.service === 'bluesky' ? 'Bluesky' : (item.repo ? item.repo : 'Note');
+
+        byYear[year].push(item);
+    });
+
+    Object.keys(byYear).sort((a, b) => b - a).forEach(year => {
+        timeline.push({
+            year: year,
+            items: byYear[year]
+        });
+    });
+
+    // 4. Status Object
+    let statusObj = null;
+    if (githubStatus) {
+        const emojiHtml = md.renderInline(githubStatus.emoji || '💭');
+        statusObj = {
+            emoji: emojiHtml,
+            message: githubStatus.message,
+            busyClass: githubStatus.indicatesLimitedAvailability ? 'status-busy' : ''
+        };
     }
-    if (a.plausible?.enabled) head += `<script defer data-domain="${a.plausible.domain}" src="${a.plausible.src}"></script>`;
-    if (a.cloudflare?.enabled) head += `<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "${a.cloudflare.token}"}'></script>`;
-    return head;
+
+    // 5. Now Post
+    let nowObj = null;
+    if (nowPost) {
+        nowObj = {
+            content: md.render(nowPost.body),
+            date: nowPost.date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+            })
+        };
+    }
+
+    return {
+        profile: config.profile,
+        analytics: config.analytics,
+        feeds: config.feeds ? Object.keys(config.feeds).map(k => ({
+            file: k,
+            ...config.feeds[k],
+            mime: config.feeds[k].type === 'atom' ? 'application/atom+xml' : 'application/rss+xml'
+        })) : [],
+        year_range: config.profile.copyright_start == new Date().getFullYear()
+            ? `${config.profile.copyright_start}`
+            : `${config.profile.copyright_start}–${new Date().getFullYear()}`,
+
+        filters: Array.from(uniqueTags).map(t => ({
+            id: t
+        })),
+        filter_sections: filter_sections,
+        dynamic_css: dynamic_css,
+
+        timeline: timeline,
+        status: statusObj,
+        now: nowObj
+    };
 }
 
-function generateDynamicStyles(uniqueTags) {
-  let css = '';
-  uniqueTags.forEach(tag => {
-    const id = `f-${tag}`; const cls = `tag-${tag}`;
-    css += `body:has(#${id}:checked) label[for="${id}"] { color: var(--c-text); font-weight: 800; }\n`;
-    css += `body:has(#${id}:checked) label[for="${id}"]::before, body:has(#${id}:checked) label[for="${id}"]::after { opacity: 1; }\n`;
-    css += `body:has(#${id}:checked) .entry.${cls} { opacity: 1; filter: none; }\n`;
-  });
-  return css;
-}
-
-function generateFilterHTML(uniqueTags) {
-  const types = ['notes', 'commits', 'video', 'bookmark', 'rss'];
-  const knownRepos = config.github?.sources ? config.github.sources.flatMap(s => s.repos.map(r => slugify(r))) : [];
-  const knownGroups = config.github?.groups ? Object.keys(config.github.groups).map(g => slugify(g)) : [];
-  const typeTags = [], repoTags = [], groupTags = [], topicTags = [];
-  uniqueTags.forEach(tag => {
-    if (types.includes(tag)) typeTags.push(tag);
-    else if (knownRepos.includes(tag)) repoTags.push(tag);
-    else if (knownGroups.includes(tag)) groupTags.push(tag);
-    else topicTags.push(tag);
-  });
-  const renderLabel = (tag, colorVar) => {
-    const style = colorVar ? `style="color: var(${colorVar})"` : '';
-    const displayName = tagDisplayMap[tag] || tag;
-    return `<label for="f-${tag}" class="filter-tag" ${style}>${displayName}</label>`;
-  };
-  const sections = [];
-  if (typeTags.length > 0) sections.push(typeTags.map(t => renderLabel(t, '--c-accent')).join(''));
-  if (groupTags.length > 0) sections.push(groupTags.sort().map(t => renderLabel(t)).join(''));
-  if (repoTags.length > 0) sections.push(repoTags.sort().map(t => renderLabel(t)).join(''));
-  if (topicTags.length > 0) sections.push(topicTags.sort().map(t => renderLabel(t)).join(''));
-
-  return sections.join('<span class="filter-separator">|</span>');
-}
-
-function renderContent(item) {
-  const dateStr = item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const tagClasses = item.tags.map(t => `tag-${t}`).join(' ');
-
-  if (item.type === 'video') {
-      return `<article class="entry ${tagClasses}"><div class="note-media"><a href="${item.url}"><img src="${item.image}" alt="${item.title}"></a></div><div class="note-meta"><time>${dateStr}</time><span>&middot;</span><a href="${item.url}" class="note-link">YouTube ↗</a></div></article>`;
-  }
-
-  if (item.type === 'bookmark') {
-      return `<article class="entry ${tagClasses}"><div class="entry-row"><a href="${item.url}" class="entry-title">🔖 ${item.title}</a><span class="dots"></span><time class="entry-date">${dateStr}</time></div><span class="entry-summary">${item.body || "Saved to Raindrop.io"}</span></article>`;
-  }
-
-  if (item.type === 'note') {
-    const content = md.render(item.body);
-    let sourceLabel = 'Note';
-    if (item.service === 'bluesky') sourceLabel = 'Bluesky';
-    else if (item.service === 'mastodon') sourceLabel = 'Mastodon';
-    else if (item.service === 'lemmy') sourceLabel = 'Lemmy';
-
-    return `
-      <article class="entry ${tagClasses}">
-          <div class="note-text">${content}</div>
-          ${item.image ? `<div class="note-media"><img src="${item.image}" loading="lazy" alt="Attachment"></div>` : ''}
-          <div class="note-meta">
-              <time>${dateStr}</time>
-              <span>&middot;</span>
-              ${item.metrics?.replies > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.replies} Replies"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg> ${item.metrics.replies}</a>` : ''}
-              ${item.metrics?.reposts > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.reposts} Reposts"><svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" stroke-linecap="round" stroke-linejoin="round"></path></svg> ${item.metrics.reposts}</a>` : ''}
-              ${item.metrics?.likes > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.likes} Likes"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke-linecap="round" stroke-linejoin="round"></path></svg> ${item.metrics.likes}</a>` : ''}
-              <span>&middot;</span>
-              <a href="${item.url}" class="note-link">${sourceLabel} ↗</a>
-          </div>
-      </article>`;
-  }
-
-  if (item.type === 'release') {
-    return `<article class="entry ${tagClasses}"><div class="entry-row"><span><a href="${item.url}" class="rel-repo">${item.owner}/${item.repo}</a><span class="rel-version">${item.title}</span></span><span class="dots"></span><time class="entry-date">${dateStr}</time></div><code class="rel-msg">${item.body.split('\n')[0]}</code></article>`;
-  }
-
-  const rawBody = item.body.split('\n').filter(line => line.length > 0 && !line.startsWith('#'))[0] || "";
-  const summary = md.render(rawBody).replace(/<[^>]*>?/gm, '');
-  return `<article class="entry ${tagClasses}"><div class="entry-row"><a href="${item.url}" class="entry-title">${item.title}</a><span class="dots"></span><div class="meta-group">${item.metrics?.comments > 0 ? `<a href="${item.url}#comments" class="meta-stat" title="${item.metrics.comments} Comments"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg>${item.metrics.comments}</a>` : ''}${item.metrics?.reactions > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.reactions} Reactions"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke-linecap="round" stroke-linejoin="round"></path></svg>${item.metrics.reactions}</a>` : ''}<time class="entry-date">${dateStr}</time></div></div><span class="entry-summary">${summary}</span></article>`;
-}
-
-function generateFeeds(allContent) {
+function generateFeedFiles(allContent) {
     if (!config.feeds) return;
     const p = config.profile;
+
     Object.entries(config.feeds).forEach(([filename, settings]) => {
         const feedItems = allContent.filter(item => {
             if (settings.sources.includes('*')) return true;
             return settings.sources.includes(item.sourceName);
         }).slice(0, 20);
 
-        const feed = new RSS({ title: settings.title || p.name, description: p.tagline, feed_url: `${p.url}/${filename}`, site_url: p.url, author: p.name });
+        const feed = new RSS({
+            title: settings.title || p.name,
+            description: p.tagline,
+            feed_url: `${p.url}/${filename}`,
+            site_url: p.url,
+            author: p.name
+        });
+
         feedItems.forEach(item => {
-            feed.item({ title: item.title || 'Note', description: item.body, url: item.url, date: item.date, guid: item.url });
+            feed.item({
+                title: item.title || 'Note',
+                description: item.body,
+                url: item.url,
+                date: item.date,
+                guid: item.url
+            });
         });
 
         const dir = path.dirname(filename);
-        if (!fs.existsSync(dir)){ fs.mkdirSync(dir, { recursive: true }); }
-        fs.writeFileSync(filename, feed.xml({indent: true}));
-        console.log(`Generated ${filename}`);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, {
+            recursive: true
+        });
+        fs.writeFileSync(filename, feed.xml({
+            indent: true
+        }));
     });
 }
 
-function renderStatus() {
-    if (!githubStatus) return '';
-    const busyClass = githubStatus.indicatesLimitedAvailability ? 'status-busy' : '';
-
-    let icon = githubStatus.emoji || '💭';
-
-    // GitHub sends ":shortcode:". node-emoji.get() prefers "shortcode" (no colons).
-    if (icon && icon.startsWith(':') && icon.endsWith(':')) {
-        const shortname = icon.slice(1, -1); // Remove first and last char
-        // Try to get the unicode character
-        const parsed = emoji.get(shortname);
-
-        // Check if we actually got a unicode character back (not the shortcode again)
-        if (parsed && !parsed.startsWith(':')) {
-            icon = parsed;
-        }
-        else {
-            // Fallback: try emojify on the original string
-            icon = emoji.emojify(icon);
-        }
-    }
-
-    return `<div class="gh-status ${busyClass}"><span class="status-emoji">${icon}</span><span class="status-text">${githubStatus.message}</span></div>`;
-}
-
-function renderNow() {
-    if (!nowPost) return '';
-    const content = md.render(nowPost.body);
-    return `<section class="now-section"><div class="now-label">NOW</div><div class="now-content">${content}</div><div class="now-meta">Updated ${nowPost.date.toLocaleDateString()}</div></section>`;
-}
-
+// MAIN
 async function build() {
-  const results = await Promise.allSettled([
-      fetchGitHub(), fetchBluesky(), fetchMastodon(), fetchLemmy(), fetchYouTube(), fetchRaindrop(), fetchGitLab(), fetchGitea(), fetchBitbucket(), fetchRSS()
-  ]);
+    console.log("Starting Build...");
 
-  const allContent = results
-    .filter(r => r.status === 'fulfilled')
-    .flatMap(r => r.value)
-    .sort((a, b) => b.date - a.date);
+    const results = await Promise.allSettled([
+        fetchGitHub(), fetchBluesky(), fetchMastodon(), fetchLemmy(),
+        fetchYouTube(), fetchRaindrop(), fetchGitLab(), fetchGitea(), fetchBitbucket(), fetchRSS()
+    ]);
 
-  console.log(`Total items: ${allContent.length}`);
+    const allContent = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value).sort((a, b) => b.date - a.date);
 
-  const uniqueTags = new Set();
-  allContent.forEach(item => item.tags.forEach(t => uniqueTags.add(t)));
-  const sortedTags = Array.from(uniqueTags);
+    console.log(`Total items collected: ${allContent.length}`);
 
-  const dynamicCSS = generateDynamicStyles(sortedTags);
-  const filterHTML = generateFilterHTML(sortedTags);
-  const inputsHTML = sortedTags.map(t => `<input type="checkbox" class="filter-check" id="f-${t}">`).join('');
-  const headHTML = generateHead();
-  const statusHTML = renderStatus();
-  const nowHTML = renderNow();
+    const uniqueTags = new Set();
+    allContent.forEach(item => item.tags.forEach(t => uniqueTags.add(t)));
 
-  const byYear = {};
-  allContent.forEach(item => {
-    const year = item.date.getFullYear();
-    if (!byYear[year]) byYear[year] = [];
-    byYear[year].push(item);
-  });
+    // Prepare Data
+    const data = prepareTemplateData(allContent, uniqueTags);
 
-  let contentHTML = '';
-  Object.keys(byYear).sort((a, b) => b - a).forEach(year => {
-    contentHTML += `<section class="year-block"><h2 class="year-title">${year}</h2>`;
-    byYear[year].forEach(item => contentHTML += renderContent(item));
-    contentHTML += `</section>`;
-  });
+    // Render
+    const template = fs.readFileSync('index.liquid', 'utf8');
+    const html = await engine.parseAndRender(template, data);
+    fs.writeFileSync('index.html', html);
 
-  let socialsHTML = '';
-  if (config.profile.socials) socialsHTML = config.profile.socials.map(s => `<a href="${s.url}">${s.name}</a>`).join('\n');
-  const yearRange = `${config.profile.copyright_start}–${new Date().getFullYear()}`;
+    // Feeds
+    generateFeedFiles(allContent);
 
-  const template = fs.readFileSync('index.template.html', 'utf8');
-  let finalHTML = template
-    .replace('<!-- INJECT_HEAD -->', headHTML)
-    .replace(/<!-- CONFIG_NAME -->/g, config.profile.name)
-    .replace(/<!-- CONFIG_TAGLINE -->/g, config.profile.tagline)
-    .replace(/<!-- CONFIG_YEAR_RANGE -->/g, yearRange)
-    .replace('<!-- INJECT_SOCIALS -->', socialsHTML)
-    .replace('<!-- INJECT_CSS_LOGIC -->', dynamicCSS)
-    .replace('<!-- INJECT_FILTERS -->', inputsHTML)
-    .replace('<!-- INJECT_FILTER_LIST -->', filterHTML)
-    .replace('<!-- INJECT_STATUS -->', statusHTML)
-    .replace('<!-- INJECT_NOW -->', nowHTML)
-    .replace('<!-- INJECT_CONTENT -->', contentHTML);
-
-  fs.writeFileSync('index.html', finalHTML);
-  generateFeeds(allContent);
-  console.log("Build complete.");
+    console.log("Build complete.");
 }
 
 build();
