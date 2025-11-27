@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -28,7 +28,7 @@ jobs:
           node-version: '20'
 
       - name: Install Dependencies
-        run: npm install node-fetch@2 markdown-it rss dotenv
+        run: npm install node-fetch@2 markdown-it rss dotenv rss rss-parser node-emoji@1
 
       - name: Run Build Script
         env:

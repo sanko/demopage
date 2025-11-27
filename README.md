@@ -2,11 +2,7 @@
 
 **Monolog** is a headless, single-column content aggregator and personal website engine.
 
-It treats the internet as your CMS. Instead of logging into a WordPress admin panel or writing markdown files in a specific folder, you simply live your digital life: write posts on GitHub Discussions, bookmark interesting links on Raindrop, push code to GitLab, or post thoughts on Bluesky.
-
-Monolog fetches this activity via APIs, normalizes it into a single timeline, categorizes it with a zero-JavaScript filtering system, and generates a static HTML site (plus custom RSS feeds) automatically.
-
----
+It treats the internet as your CMS. You write posts on Github or Bluesky, push code to GitLab or Gitea, and bookmark links on Raindrop. Monolog fetches it all, filters it, and builds a static HTML site (with RSS feeds) automatically.
 
 ## 🚀 Quick Start
 
@@ -25,24 +21,70 @@ Monolog fetches this activity via APIs, normalizes it into a single timeline, ca
     node build.js
     ```
 
+Personally, I'd throw the thing in a Github Workflow.
+
+```yaml
+name: Build and Deploy Monolog
+
+on:
+  # Every 2 hours
+  schedule:
+    - cron: '0 0/2 * * *'
+  # Run when you push changes to config or template
+  push:
+    branches: [ main ]
+  # Allow manual run button in GitHub UI
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install node-fetch@2 markdown-it rss dotenv rss rss-parser node-emoji@1
+
+      - name: Run Build Script
+        env:
+          # GITHUB_TOKEN is automatically provided by Actions
+          # We use it to fetch your discussions/releases
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node build.js
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+```
+
 ---
 
-## 📝 Writing Content (The CMS)
-
-Monolog uses **GitHub Discussions** as its primary authoring tool. To set this up, enable "Discussions" in your GitHub repository settings.
-
-| Content Type | Where to Write | How it appears |
-| :--- | :--- | :--- |
-| **Article** | Discussion Category: **"General"** | Title + Summary. Click to read full post. Labels become tags. |
-| **Note** | Discussion Category: **"Notes"** | Microblog style. Full content shown inline. No title required. |
-| **Now Page** | Discussion Category: **"Now"** | The most recent post in this category is pinned to the top of the homepage. |
-| **Draft** | Discussion Category: **"Drafts"** | Ignored by the build script. |
-
----
-
-## ⚙️ Configuration Reference (`config.json`)
-
-The `config.json` file controls everything. Below is the complete documentation for every section.
+## ⚙️ Configuration (`config.json`)
 
 ### `profile`
 Controls the header, footer, and SEO meta tags.
@@ -55,25 +97,10 @@ Controls the header, footer, and SEO meta tags.
 | `email` | string | Displayed in footer. |
 | `og_image` | string | Absolute URL to an image used for Twitter/OpenGraph cards. |
 | `copyright_start`| string | Year to start the copyright range (e.g., "2023"). |
-| `socials` | array | List of links to display in the footer. |
-
-**Example:**
-```json
-"profile": {
-  "name": "John Doe",
-  "tagline": "Building the future, one commit at a time.",
-  "url": "https://johndoe.com",
-  "socials": [
-    { "name": "github", "url": "https://github.com/johndoe" },
-    { "name": "bluesky", "url": "https://bsky.app/profile/johndoe.bsky.social" }
-  ]
-}
-```
-
----
+| `socials` | array | List of objects `{ "name": "...", "url": "..." }` to display in the footer. |
 
 ### `analytics`
-Monolog supports privacy-friendly analytics out of the box.
+Supports privacy-friendly analytics out of the box.
 
 | Provider | Config Keys | Description |
 | :--- | :--- | :--- |
@@ -89,7 +116,7 @@ The core engine. Fetches Discussions, Issues, and Releases via GraphQL.
 | Property | Required | Description |
 | :--- | :--- | :--- |
 | `name` | **Yes** | Internal ID used for generating specific RSS feeds later. |
-| `owner` | **Yes** | The GitHub username or Organization name. |
+| `owner` | **Yes** | The Github username or Organization name. |
 | `repos` | **Yes** | Array of repository names to fetch from. |
 | `discussions` | No | `true`/`false` (Default: `true`). Fetch blog posts/notes. |
 | `releases` | No | `true`/`false` (Default: `true`). Fetch releases/tags. |
@@ -138,15 +165,13 @@ Fetches posts from Bluesky as "Notes".
 
 ---
 
-### `mastodon` (Source)
-Fetches toots from any Mastodon-compatible instance.
+### `mastodon` / `lemmy` (Fediverse)
+Fetches toots/posts from any compatible instance.
 
-**`sources` array options:**
-| Property | Description |
-| :--- | :--- |
-| `name` | Internal ID for RSS filtering. |
-| `instance`| The domain of the instance (e.g., `mastodon.social`). |
-| `id` | The **Numeric User ID**. *To find this: Go to your profile page, view source, and search for `rss` or check the API response for your username.* |
+| Service | Config Keys | Description |
+| :--- | :--- | :--- |
+| **mastodon** | `instance`, `id` | Numeric User ID required. |
+| **lemmy** | `instance`, `username` | Fetches user posts/comments. |
 
 ---
 
@@ -157,7 +182,7 @@ Fetches recent videos.
 | Property | Description |
 | :--- | :--- |
 | `name` | Internal ID for RSS filtering. |
-| `channel_id` | The ID starting with `UC...`. You can find this in the URL of your channel page. |
+| `channel_id` | The ID starting with `UC...`. |
 
 ---
 
@@ -167,6 +192,17 @@ Fetches bookmarks from Raindrop.io collections.
 | Property | Description |
 | :--- | :--- |
 | `collection_id` | The numeric ID of the collection. `0` is "All Bookmarks". |
+
+---
+
+### `rss` (Source)
+Ingest external RSS or Atom feeds (e.g., Substack, Medium, Blogs).
+
+**`sources` array options:**
+| Property | Description |
+| :--- | :--- |
+| `name` | Internal ID for filtering and tag generation. |
+| `url` | The full URL to the `.xml` or `.rss` feed. |
 
 ---
 
@@ -184,24 +220,17 @@ Fetch releases/tags from other git forges.
 ### `feeds` (Output)
 Define exactly which content goes into which RSS/Atom feed file.
 
-| Property | Description |
-| :--- | :--- |
-| `type` | `rss` or `atom`. |
-| `title` | The title of the feed (defaults to Profile Name if omitted). |
-| `sources` | An array of `name` strings defined in your sources above. Use `["*"]` to include everything. |
-| `groups` | *(Optional)* Filter items further by requiring them to belong to a specific Group defined in `github.groups`. |
-
 **Example:**
 ```json
 "feeds": {
-  // The Firehose: Everything
+  // The Master Feed (Everything)
   "feed.xml": { "type": "rss", "sources": ["*"] },
 
-  // Only items from the 'personal' github source and 'vlog' youtube source
-  "feeds/personal.xml": {
+  // Code Only (No social posts)
+  "feeds/code.xml": {
     "type": "atom",
-    "sources": ["personal", "vlog"],
-    "title": "John's Personal Updates"
+    "sources": ["personal", "work"], // Matches 'name' in github/gitlab config
+    "title": "John's Code Releases"
   }
 }
 ```
@@ -210,55 +239,19 @@ Define exactly which content goes into which RSS/Atom feed file.
 
 ## 🔑 Secrets & Environment Variables
 
-Create a `.env` file in the root directory for local development. In GitHub Actions, add these to **Settings > Secrets and variables > Actions**.
+Create a `.env` file in the root directory for local development. In Github Actions, add these to **Settings > Secrets and variables > Actions**.
 
-### Required
-*   **`GH_TOKEN`**: A GitHub Personal Access Token (Classic).
-    *   **Scopes:** `repo` (if fetching private repos), `public_repo` (if public), `read:discussion`.
-    *   *Why?* Even for public repos, the GraphQL API requires authentication to avoid rate limits.
+*   `GH_TOKEN`: (Required) Github Personal Access Token.
+*   `RAINDROP_TOKEN`: (Optional) For Raindrop.
+*   `GITLAB_TOKEN`, `GITEA_TOKEN`, `BITBUCKET_APP_PASS`: (Optional) For private repos.
 
-### Optional (Service Dependent)
-*   **`RAINDROP_TOKEN`**: Required if using Raindrop. Get a "Test Token" from the Raindrop integration settings.
-*   **`GITLAB_TOKEN`**: Required if fetching from private GitLab repositories.
-*   **`GITEA_TOKEN`**: Required if fetching from a private Gitea instance.
-*   **`BITBUCKET_APP_PASS`**: Required if fetching from private Bitbucket repos (username in config, app password here).
+## 📝 Writing Content
 
----
-
-## 🤖 Automation (GitHub Actions)
-
-The included workflow (`.github/workflows/deploy.yml`) handles the build.
-
-1.  It runs on a schedule (default: every 4 hours).
-2.  It runs when you push config changes to `main`.
-3.  It checks out your code, installs Node, runs `build.js`, and uploads the resulting HTML/XML to GitHub Pages.
-
-**To enable:**
-1.  Go to your repo **Settings**.
-2.  Click **Pages** on the left.
-3.  Under **Build and deployment**, set Source to **GitHub Actions**.
-
----
-
-## 🎨 Theming
-
-Monolog uses CSS Variables defined in `index.template.html`. It utilizes the **OKLCH** color space for perceptually uniform colors.
-
-To customize the look, edit the `:root` block in `index.template.html`:
-
-```css
-:root {
-    --c-paper: oklch(99% 0 0);       /* Background */
-    --c-text: oklch(20% 0 0);        /* Text */
-    --c-accent: oklch(45% 0.24 270); /* The main accent color (Purple) */
-    --w-content: 42rem;              /* Width of the column */
-}
-```
-
-Dark mode is automatically handled via media queries. To change dark mode colors, edit the `@media (prefers-color-scheme: dark)` block.
-
----
+*   **Blog Post:** Github Discussion -> Category "General".
+*   **Note:** Github Discussion -> Category "Notes".
+*   **Now Page:** Github Discussion -> Category "Now".
+*   **Draft:** Github Discussion -> Category "Drafts".
 
 ## License
 
-Artistic 2 License. You are free to use, modify, and distribute this software under the terms of that license.
+You are free to use, modify, and distribute this software under the terms of the Artistic License 2.0

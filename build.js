@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
-const fetch = require('node-fetch'); // npm install node-fetch@2
+const fetch = require('node-fetch');
 const MarkdownIt = require('markdown-it');
 const RSS = require('rss');
+const Parser = require('rss-parser');
+const emoji = require('node-emoji');
 require('dotenv').config();
 
 const md = new MarkdownIt({ html: true, linkify: true });
@@ -14,10 +16,11 @@ const slugify = txt => txt.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 let githubStatus = null;
 let nowPost = null;
 
-// --- TAG MAPPING ---
+// --- TAG MAP ---
 const tagDisplayMap = {
     'notes': 'Notes', 'commits': 'Commits', 'bluesky': 'Bluesky',
-    'video': 'Video', 'bookmark': 'Reading', 'social': 'Social'
+    'video': 'Video', 'bookmark': 'Reading', 'social': 'Social', 'rss': 'RSS',
+    'mastodon': 'Mastodon', 'lemmy': 'Lemmy'
 };
 if (config.github?.tag_overrides) {
     Object.assign(tagDisplayMap, config.github.tag_overrides);
@@ -28,16 +31,23 @@ if (config.github?.tag_overrides) {
 async function fetchGitHub() {
   if (!config.github?.sources) return [];
   console.log('Fetching GitHub...');
-  const allData = [];
 
-  const query = `query($owner: String!, $name: String!) {
-      viewer { status { emoji, message, indicatesLimitedAvailability } }
+  // 1. Get your username from the profile config
+  const primaryUser = getPrimaryGitHubUser();
+
+  // 2. Update Query to fetch specific User
+  const query = `query($owner: String!, $name: String!, $user: String!) {
+      user(login: $user) {
+        status { emoji, message, indicatesLimitedAvailability }
+      }
       repository(owner: $owner, name: $name) {
-        discussions(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { title, url, createdAt, body, author { login }, category { name }, labels(first: 3) { nodes { name } }, comments { totalCount }, reactions { totalCount } } }
+        discussions(first: 20, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { title, url, createdAt, body, author { login }, category { name }, labels(first: 3) { nodes { name } }, comments { totalCount }, reactions { totalCount } } }
         issues(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { title, url, createdAt, body, author { login }, labels(first: 3) { nodes { name } }, comments { totalCount }, reactions { totalCount } } }
         releases(first: 5, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { tagName, url, publishedAt, description, name } }
       }
     }`;
+
+  const allData = [];
 
   for (const source of config.github.sources) {
     const enableDiscussions = source.discussions !== false;
@@ -49,21 +59,28 @@ async function fetchGitHub() {
         const res = await fetch('https://api.github.com/graphql', {
           method: 'POST',
           headers: { 'Authorization': `bearer ${process.env.GH_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, variables: { owner: source.owner, name: repo } })
+          body: JSON.stringify({
+              query,
+              variables: {
+                  owner: source.owner,
+                  name: repo,
+                  user: primaryUser || source.owner
+              }
+          })
         });
         const json = await res.json();
         if (!json.data) continue;
 
         // Capture Status
-        if (!githubStatus && json.data.viewer?.status) githubStatus = json.data.viewer.status;
+        if (!githubStatus && json.data.user?.status) {
+            githubStatus = json.data.user.status;
+        }
 
         const { discussions, issues, releases } = json.data.repository;
         const repoSlug = slugify(repo);
         if (!tagDisplayMap[repoSlug]) tagDisplayMap[repoSlug] = repo;
 
-        // Helper to add items
         const pushItem = (item, type, tags) => {
-            // Add Group Tags
             const groups = [];
             const fullName = `${source.owner}/${repo}`;
             if (config.github.groups) {
@@ -75,7 +92,6 @@ async function fetchGitHub() {
                     }
                 }
             }
-
             allData.push({
                 sourceName: source.name,
                 type: type, service: 'github', owner: source.owner, repo: repo,
@@ -90,6 +106,7 @@ async function fetchGitHub() {
 
         if (enableDiscussions && discussions) {
             discussions.nodes.forEach(d => {
+                if (primaryUser && d.author.login !== primaryUser && d.author.login !== source.owner) return;
                 if (d.category.name.toLowerCase() === 'now') {
                     const date = new Date(d.createdAt);
                     if (!nowPost || date > nowPost.date) nowPost = { body: d.body, date: date, url: d.url };
@@ -126,7 +143,10 @@ async function fetchBluesky() {
   const allData = [];
   for (const source of config.bluesky.sources) {
     try {
-      const res = await fetch(`https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${source.handle}&filter=posts_no_replies&limit=20`);
+      let url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${source.handle}&filter=posts_no_replies&limit=20`;
+      if (source.feed) url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getFeed?feed=${source.feed}&limit=20`;
+
+      const res = await fetch(url);
       const json = await res.json();
       if (!json.feed) continue;
       json.feed.forEach(item => {
@@ -163,7 +183,7 @@ async function fetchMastodon() {
                     sourceName: source.name,
                     type: 'note', service: 'mastodon',
                     date: new Date(post.created_at),
-                    body: post.content.replace(/<[^>]*>?/gm, ''), // Strip HTML
+                    body: post.content.replace(/<[^>]*>?/gm, ''),
                     url: post.url,
                     image: imageUrl,
                     tags: ['notes'],
@@ -202,7 +222,6 @@ async function fetchLemmy() {
 }
 
 async function fetchRaindrop() {
-    // Requires RAINDROP_TOKEN in .env
     if (!config.raindrop?.collection_id || !process.env.RAINDROP_TOKEN) return [];
     console.log('Fetching Raindrop...');
     try {
@@ -229,21 +248,17 @@ async function fetchYouTube() {
   if (!config.youtube?.sources) return [];
   console.log('Fetching YouTube...');
   const allData = [];
+  const parser = new Parser();
+
   for (const source of config.youtube.sources) {
       try {
-          const res = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${source.channel_id}`);
-          const text = await res.text();
-          const entries = text.match(/<entry>[\s\S]*?<\/entry>/g) || [];
-          entries.forEach(entry => {
-              const title = entry.match(/<title>(.*?)<\/title>/)[1];
-              const url = entry.match(/<link rel="alternate" href="(.*?)"/)[1];
-              const date = entry.match(/<published>(.*?)<\/published>/)[1];
-              const thumb = entry.match(/<media:thumbnail url="(.*?)"/)?.[1];
-
+          const feed = await parser.parseURL(`https://www.youtube.com/feeds/videos.xml?channel_id=${source.channel_id}`);
+          feed.items.forEach(item => {
               allData.push({
                   sourceName: source.name,
                   type: 'video', service: 'youtube',
-                  date: new Date(date), title: title, url: url, body: "", image: thumb,
+                  date: new Date(item.pubDate), title: item.title, url: item.link, body: "",
+                  image: `https://i.ytimg.com/vi/${item.id.split(':')[2]}/hqdefault.jpg`,
                   tags: ['video']
               });
           });
@@ -252,14 +267,39 @@ async function fetchYouTube() {
   return allData;
 }
 
+async function fetchRSS() {
+    if (!config.rss?.sources) return [];
+    console.log('Fetching RSS...');
+    const allData = [];
+    const parser = new Parser();
+    for (const source of config.rss.sources) {
+        try {
+            const feed = await parser.parseURL(source.url);
+            feed.items.slice(0, 10).forEach(item => {
+                const bodyText = (item.contentSnippet || item.content || "").trim();
+                allData.push({
+                    sourceName: source.name,
+                    type: 'article', service: 'rss',
+                    owner: source.name, repo: 'feed',
+                    date: new Date(item.pubDate || item.isoDate),
+                    title: item.title,
+                    url: item.link,
+                    body: bodyText,
+                    tags: ['rss', slugify(source.name)],
+                    metrics: {}
+                });
+            });
+        } catch (e) { console.error(`RSS Error ${source.name}:`, e.message); }
+    }
+    return allData;
+}
+
 async function fetchGitLab() {
     if (!config.gitlab?.sources) return [];
     console.log('Fetching GitLab...');
     const allData = [];
     for (const source of config.gitlab.sources) {
         try {
-            // Fetches releases for a specific project ID
-            // Requires GITLAB_TOKEN if private, public otherwise
             const headers = process.env.GITLAB_TOKEN ? { 'PRIVATE-TOKEN': process.env.GITLAB_TOKEN } : {};
             const res = await fetch(`https://${config.gitlab.instance || 'gitlab.com'}/api/v4/projects/${source.id}/releases`, { headers });
             const json = await res.json();
@@ -269,7 +309,7 @@ async function fetchGitLab() {
                 allData.push({
                     sourceName: source.name,
                     type: 'release', service: 'gitlab',
-                    owner: 'gitlab', repo: source.id, // Use ID as repo identifier
+                    owner: 'gitlab', repo: source.id,
                     date: new Date(r.released_at),
                     title: r.name,
                     version: r.tag_name,
@@ -289,7 +329,8 @@ async function fetchGitea() {
     const allData = [];
     for (const source of config.gitea.sources) {
         try {
-            const res = await fetch(`https://${config.gitea.instance}/api/v1/repos/${source.owner}/${source.repo}/releases?limit=5`);
+            const headers = process.env.GITEA_TOKEN ? { 'Authorization': `token ${process.env.GITEA_TOKEN}` } : {};
+            const res = await fetch(`https://${config.gitea.instance}/api/v1/repos/${source.owner}/${source.repo}/releases?limit=5`, { headers });
             const json = await res.json();
             if(!Array.isArray(json)) continue;
             json.forEach(r => {
@@ -315,8 +356,8 @@ async function fetchBitbucket() {
     const allData = [];
     for (const source of config.bitbucket.sources) {
         try {
-            // Uses simple tag fetching
-            const res = await fetch(`https://api.bitbucket.org/2.0/repositories/${source.workspace}/${source.repo_slug}/refs/tags?sort=-target.date`);
+            const headers = process.env.BITBUCKET_APP_PASS ? { 'Authorization': `Basic ${Buffer.from(`${config.bitbucket.username}:${process.env.BITBUCKET_APP_PASS}`).toString('base64')}` } : {};
+            const res = await fetch(`https://api.bitbucket.org/2.0/repositories/${source.workspace}/${source.repo_slug}/refs/tags?sort=-target.date`, { headers });
             const json = await res.json();
             if(!json.values) continue;
 
@@ -337,66 +378,24 @@ async function fetchBitbucket() {
     return allData;
 }
 
-// --- RENDERERS ---
+// --- HELPERS ---
 
-function renderContent(item) {
-  const dateStr = item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const tagClasses = item.tags.map(t => `tag-${t}`).join(' ');
-
-  // VIDEO
-  if (item.type === 'video') {
-      return `<article class="entry ${tagClasses}"><div class="note-media"><a href="${item.url}"><img src="${item.image}" alt="${item.title}"></a></div><div class="note-meta"><time>${dateStr}</time><span>&middot;</span><a href="${item.url}" class="note-link">YouTube ↗</a></div></article>`;
-  }
-
-  // BOOKMARK
-  if (item.type === 'bookmark') {
-      return `<article class="entry ${tagClasses}"><div class="entry-row"><a href="${item.url}" class="entry-title">🔖 ${item.title}</a><span class="dots"></span><time class="entry-date">${dateStr}</time></div><span class="entry-summary">${item.body || "Saved to Raindrop.io"}</span></article>`;
-  }
-
-  // NOTE
-  if (item.type === 'note') {
-    const content = md.render(item.body);
-    // Determine label based on service
-    let sourceLabel = 'Note';
-    if (item.service === 'bluesky') sourceLabel = 'Bluesky';
-    if (item.service === 'mastodon') sourceLabel = 'Mastodon';
-    if (item.service === 'lemmy') sourceLabel = 'Lemmy';
-
-    return `
-      <article class="entry ${tagClasses}">
-          <div class="note-text">${content}</div>
-          ${item.image ? `<div class="note-media"><img src="${item.image}" loading="lazy" alt="Attachment"></div>` : ''}
-          <div class="note-meta">
-              <time>${dateStr}</time>
-              <span>&middot;</span>
-              ${item.metrics?.replies > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.replies} Replies"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg> ${item.metrics.replies}</a>` : ''}
-              ${item.metrics?.reposts > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.reposts} Reposts"><svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" stroke-linecap="round" stroke-linejoin="round"></path></svg> ${item.metrics.reposts}</a>` : ''}
-              ${item.metrics?.likes > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.likes} Likes"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke-linecap="round" stroke-linejoin="round"></path></svg> ${item.metrics.likes}</a>` : ''}
-              <span>&middot;</span>
-              <a href="${item.url}" class="note-link">${sourceLabel} ↗</a>
-          </div>
-      </article>`;
-  }
-
-  // RELEASE
-  if (item.type === 'release') {
-    return `<article class="entry ${tagClasses}"><div class="entry-row"><span><a href="${item.url}" class="rel-repo">${item.owner}/${item.repo}</a><span class="rel-version">${item.version}</span></span><span class="dots"></span><time class="entry-date">${dateStr}</time></div><code class="rel-msg">${item.body.split('\n')[0]}</code></article>`;
-  }
-
-  // ARTICLE
-  const rawBody = item.body.split('\n').filter(line => line.length > 0 && !line.startsWith('#'))[0] || "";
-  const summary = md.render(rawBody).replace(/<[^>]*>?/gm, '');
-  return `<article class="entry ${tagClasses}"><div class="entry-row"><a href="${item.url}" class="entry-title">${item.title}</a><span class="dots"></span><div class="meta-group">${item.metrics?.comments > 0 ? `<a href="${item.url}#comments" class="meta-stat" title="${item.metrics.comments} Comments"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg>${item.metrics.comments}</a>` : ''}${item.metrics?.reactions > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.reactions} Reactions"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke-linecap="round" stroke-linejoin="round"></path></svg>${item.metrics.reactions}</a>` : ''}<time class="entry-date">${dateStr}</time></div></div><span class="entry-summary">${summary}</span></article>`;
+function getPrimaryGitHubUser() {
+    if (config.profile.github_username) return config.profile.github_username;
+    if (config.profile.socials) {
+        const ghLink = config.profile.socials.find(s => s.name.toLowerCase() === 'github');
+        if (ghLink && ghLink.url) return ghLink.url.replace(/\/$/, '').split('/').pop();
+    }
+    return null;
 }
-
-// --- CORE GENERATORS (Reuse existing logic) ---
-// (Included in abbreviated form below for completeness)
 
 function generateHead() {
     const p = config.profile;
     const a = config.analytics || {};
     let head = `<title>${p.name}</title><meta name="description" content="${p.tagline}">`;
-    // ... (SEO meta tags) ...
+    head += `<meta property="og:type" content="website"><meta property="og:title" content="${p.name}"><meta property="og:description" content="${p.tagline}"><meta property="og:url" content="${p.url}">`;
+    if (p.og_image) head += `<meta property="og:image" content="${p.og_image}">`;
+
     if (config.feeds) {
         Object.keys(config.feeds).forEach(filename => {
             const f = config.feeds[filename];
@@ -421,10 +420,72 @@ function generateDynamicStyles(uniqueTags) {
 }
 
 function generateFilterHTML(uniqueTags) {
-  // ... Same logic as previous: sort by type, repo, topic ...
-  const types = ['notes', 'commits', 'video', 'bookmark'];
-  // ... (filtering and sorting logic) ...
-  return uniqueTags.map(t => `<label for="f-${t}" class="filter-tag">${tagDisplayMap[t] || t}</label>`).join('');
+  const types = ['notes', 'commits', 'video', 'bookmark', 'rss'];
+  const knownRepos = config.github?.sources ? config.github.sources.flatMap(s => s.repos.map(r => slugify(r))) : [];
+  const knownGroups = config.github?.groups ? Object.keys(config.github.groups).map(g => slugify(g)) : [];
+  const typeTags = [], repoTags = [], groupTags = [], topicTags = [];
+  uniqueTags.forEach(tag => {
+    if (types.includes(tag)) typeTags.push(tag);
+    else if (knownRepos.includes(tag)) repoTags.push(tag);
+    else if (knownGroups.includes(tag)) groupTags.push(tag);
+    else topicTags.push(tag);
+  });
+  const renderLabel = (tag, colorVar) => {
+    const style = colorVar ? `style="color: var(${colorVar})"` : '';
+    const displayName = tagDisplayMap[tag] || tag;
+    return `<label for="f-${tag}" class="filter-tag" ${style}>${displayName}</label>`;
+  };
+  const sections = [];
+  if (typeTags.length > 0) sections.push(typeTags.map(t => renderLabel(t, '--c-accent')).join(''));
+  if (groupTags.length > 0) sections.push(groupTags.sort().map(t => renderLabel(t)).join(''));
+  if (repoTags.length > 0) sections.push(repoTags.sort().map(t => renderLabel(t)).join(''));
+  if (topicTags.length > 0) sections.push(topicTags.sort().map(t => renderLabel(t)).join(''));
+
+  return sections.join('<span class="filter-separator">|</span>');
+}
+
+function renderContent(item) {
+  const dateStr = item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const tagClasses = item.tags.map(t => `tag-${t}`).join(' ');
+
+  if (item.type === 'video') {
+      return `<article class="entry ${tagClasses}"><div class="note-media"><a href="${item.url}"><img src="${item.image}" alt="${item.title}"></a></div><div class="note-meta"><time>${dateStr}</time><span>&middot;</span><a href="${item.url}" class="note-link">YouTube ↗</a></div></article>`;
+  }
+
+  if (item.type === 'bookmark') {
+      return `<article class="entry ${tagClasses}"><div class="entry-row"><a href="${item.url}" class="entry-title">🔖 ${item.title}</a><span class="dots"></span><time class="entry-date">${dateStr}</time></div><span class="entry-summary">${item.body || "Saved to Raindrop.io"}</span></article>`;
+  }
+
+  if (item.type === 'note') {
+    const content = md.render(item.body);
+    let sourceLabel = 'Note';
+    if (item.service === 'bluesky') sourceLabel = 'Bluesky';
+    else if (item.service === 'mastodon') sourceLabel = 'Mastodon';
+    else if (item.service === 'lemmy') sourceLabel = 'Lemmy';
+
+    return `
+      <article class="entry ${tagClasses}">
+          <div class="note-text">${content}</div>
+          ${item.image ? `<div class="note-media"><img src="${item.image}" loading="lazy" alt="Attachment"></div>` : ''}
+          <div class="note-meta">
+              <time>${dateStr}</time>
+              <span>&middot;</span>
+              ${item.metrics?.replies > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.replies} Replies"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg> ${item.metrics.replies}</a>` : ''}
+              ${item.metrics?.reposts > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.reposts} Reposts"><svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" stroke-linecap="round" stroke-linejoin="round"></path></svg> ${item.metrics.reposts}</a>` : ''}
+              ${item.metrics?.likes > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.likes} Likes"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke-linecap="round" stroke-linejoin="round"></path></svg> ${item.metrics.likes}</a>` : ''}
+              <span>&middot;</span>
+              <a href="${item.url}" class="note-link">${sourceLabel} ↗</a>
+          </div>
+      </article>`;
+  }
+
+  if (item.type === 'release') {
+    return `<article class="entry ${tagClasses}"><div class="entry-row"><span><a href="${item.url}" class="rel-repo">${item.owner}/${item.repo}</a><span class="rel-version">${item.title}</span></span><span class="dots"></span><time class="entry-date">${dateStr}</time></div><code class="rel-msg">${item.body.split('\n')[0]}</code></article>`;
+  }
+
+  const rawBody = item.body.split('\n').filter(line => line.length > 0 && !line.startsWith('#'))[0] || "";
+  const summary = md.render(rawBody).replace(/<[^>]*>?/gm, '');
+  return `<article class="entry ${tagClasses}"><div class="entry-row"><a href="${item.url}" class="entry-title">${item.title}</a><span class="dots"></span><div class="meta-group">${item.metrics?.comments > 0 ? `<a href="${item.url}#comments" class="meta-stat" title="${item.metrics.comments} Comments"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg>${item.metrics.comments}</a>` : ''}${item.metrics?.reactions > 0 ? `<a href="${item.url}" class="meta-stat" title="${item.metrics.reactions} Reactions"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke-linecap="round" stroke-linejoin="round"></path></svg>${item.metrics.reactions}</a>` : ''}<time class="entry-date">${dateStr}</time></div></div><span class="entry-summary">${summary}</span></article>`;
 }
 
 function generateFeeds(allContent) {
@@ -451,7 +512,26 @@ function generateFeeds(allContent) {
 function renderStatus() {
     if (!githubStatus) return '';
     const busyClass = githubStatus.indicatesLimitedAvailability ? 'status-busy' : '';
-    return `<div class="gh-status ${busyClass}"><span class="status-emoji">${githubStatus.emoji || '💭'}</span><span class="status-text">${githubStatus.message}</span></div>`;
+
+    let icon = githubStatus.emoji || '💭';
+
+    // GitHub sends ":shortcode:". node-emoji.get() prefers "shortcode" (no colons).
+    if (icon && icon.startsWith(':') && icon.endsWith(':')) {
+        const shortname = icon.slice(1, -1); // Remove first and last char
+        // Try to get the unicode character
+        const parsed = emoji.get(shortname);
+
+        // Check if we actually got a unicode character back (not the shortcode again)
+        if (parsed && !parsed.startsWith(':')) {
+            icon = parsed;
+        }
+        else {
+            // Fallback: try emojify on the original string
+            icon = emoji.emojify(icon);
+        }
+    }
+
+    return `<div class="gh-status ${busyClass}"><span class="status-emoji">${icon}</span><span class="status-text">${githubStatus.message}</span></div>`;
 }
 
 function renderNow() {
@@ -460,14 +540,11 @@ function renderNow() {
     return `<section class="now-section"><div class="now-label">NOW</div><div class="now-content">${content}</div><div class="now-meta">Updated ${nowPost.date.toLocaleDateString()}</div></section>`;
 }
 
-// --- MAIN ---
-
 async function build() {
   const results = await Promise.allSettled([
-      fetchGitHub(), fetchBluesky(), fetchMastodon(), fetchLemmy(), fetchYouTube(), fetchRaindrop(), fetchGitLab(), fetchGitea(), fetchBitbucket()
+      fetchGitHub(), fetchBluesky(), fetchMastodon(), fetchLemmy(), fetchYouTube(), fetchRaindrop(), fetchGitLab(), fetchGitea(), fetchBitbucket(), fetchRSS()
   ]);
 
-  // Flatten results from settled promises
   const allContent = results
     .filter(r => r.status === 'fulfilled')
     .flatMap(r => r.value)
@@ -511,7 +588,7 @@ async function build() {
     .replace(/<!-- CONFIG_TAGLINE -->/g, config.profile.tagline)
     .replace(/<!-- CONFIG_YEAR_RANGE -->/g, yearRange)
     .replace('<!-- INJECT_SOCIALS -->', socialsHTML)
-    .replace('<!-- INJECT_CSS -->', dynamicCSS)
+    .replace('<!-- INJECT_CSS_LOGIC -->', dynamicCSS)
     .replace('<!-- INJECT_FILTERS -->', inputsHTML)
     .replace('<!-- INJECT_FILTER_LIST -->', filterHTML)
     .replace('<!-- INJECT_STATUS -->', statusHTML)

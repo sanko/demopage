@@ -8,8 +8,9 @@
     <!-- INJECT_HEAD -->
 
     <style>
-        /* --- CONFIGURATION --- */
+        /* --- THEME CONFIGURATION --- */
         :root {
+            /* Colors (Light / Default) */
             --c-paper: oklch(99% 0 0);
             --c-table: oklch(96% 0.01 200);
             --c-text: oklch(20% 0 0);
@@ -18,22 +19,45 @@
             --c-code: oklch(45% 0.15 140);
             --c-shadow: oklch(20% 0.02 270 / 10%);
 
+            /* Fonts */
             --f-serif: 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, serif;
             --f-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             --f-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
 
+            /* Layout */
             --w-content: 42rem;
             --s-gutter: clamp(1.5rem, 5vw, 3rem);
 
+            /* Animation */
             --trans-theme: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
                            color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
                            border-color 0.5s ease;
         }
 
-        /* --- THEMES --- */
-        @media (prefers-color-scheme: dark) { :root { --c-paper: oklch(18% 0 0); --c-table: oklch(14% 0 0); --c-text: oklch(90% 0.01 270); --c-sub: oklch(60% 0.01 270); --c-accent: oklch(75% 0.14 270); --c-code: oklch(80% 0.15 140); --c-shadow: oklch(0% 0 0 / 50%); } }
-        [data-theme="light"] { --c-paper: oklch(99% 0 0); --c-table: oklch(96% 0.01 200); --c-text: oklch(20% 0 0); --c-sub: oklch(50% 0 0); --c-accent: oklch(45% 0.24 270); --c-code: oklch(45% 0.15 140); --c-shadow: oklch(20% 0.02 270 / 10%); }
-        [data-theme="dark"] { --c-paper: oklch(18% 0 0); --c-table: oklch(14% 0 0); --c-text: oklch(90% 0.01 270); --c-sub: oklch(60% 0.01 270); --c-accent: oklch(75% 0.14 270); --c-code: oklch(80% 0.15 140); --c-shadow: oklch(0% 0 0 / 50%); }
+        /* Dark Mode */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --c-paper: oklch(18% 0 0);
+                --c-table: oklch(14% 0 0);
+                --c-text: oklch(90% 0.01 270);
+                --c-sub: oklch(60% 0.01 270);
+                --c-accent: oklch(75% 0.14 270);
+                --c-code: oklch(80% 0.15 140);
+                --c-shadow: oklch(0% 0 0 / 50%);
+            }
+        }
+
+        /* Manual Overrides */
+        [data-theme="light"] {
+            --c-paper: oklch(99% 0 0); --c-table: oklch(96% 0.01 200); --c-text: oklch(20% 0 0);
+            --c-sub: oklch(50% 0 0); --c-accent: oklch(45% 0.24 270); --c-code: oklch(45% 0.15 140);
+            --c-shadow: oklch(20% 0.02 270 / 10%);
+        }
+        [data-theme="dark"] {
+            --c-paper: oklch(18% 0 0); --c-table: oklch(14% 0 0); --c-text: oklch(90% 0.01 270);
+            --c-sub: oklch(60% 0.01 270); --c-accent: oklch(75% 0.14 270); --c-code: oklch(80% 0.15 140);
+            --c-shadow: oklch(0% 0 0 / 50%);
+        }
 
         /* --- BASE --- */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -49,11 +73,10 @@
         .paper-content { width: 100%; max-width: var(--w-content); margin-top: 4rem; margin-bottom: 6rem; }
 
         /* --- HEADER --- */
-        header { text-align: center; margin-bottom: 3.5rem; }
+        header { text-align: center; margin-bottom: 2rem; }
         h1 { font-size: 3rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
-        .bio { font-family: var(--f-sans); font-size: 1rem; color: var(--c-sub); margin-bottom: 2rem; }
+        .bio { font-family: var(--f-sans); font-size: 1rem; color: var(--c-sub); margin-bottom: 1.5rem; }
 
-        /* Status & Now */
         .gh-status { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.75rem; border: 1px solid color-mix(in oklch, var(--c-text), transparent 85%); border-radius: 2rem; font-family: var(--f-sans); font-size: 0.8rem; color: var(--c-sub); margin-bottom: 2rem; }
         .gh-status.status-busy { border-color: var(--c-accent); color: var(--c-accent); }
 
@@ -63,46 +86,77 @@
         .now-content p { margin-bottom: 0.5rem; }
         .now-meta { font-family: var(--f-sans); font-size: 0.7rem; color: var(--c-sub); margin-top: 1rem; text-align: right; }
 
-        /* Filter UI */
-        .filter-interface { display: flex; flex-direction: column; align-items: center; gap: 1rem; min-height: 6rem; }
-        .filter-list { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem 1rem; max-width: 55ch; font-family: var(--f-sans); font-weight: 500; font-size: 0.8rem; color: var(--c-sub); }
+        .filter-interface { display: flex; flex-direction: column; align-items: center; gap: .5rem; }
+        .filter-list { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.35rem .75rem; max-width: 55ch; font-family: var(--f-sans); font-weight: 500; font-size: 0.8rem; color: var(--c-sub); }
         .filter-tag { cursor: pointer; user-select: none; transition: color 0.2s; }
         .filter-tag:hover { color: var(--c-text); }
         .filter-tag::before { content: "[ "; opacity: 0; color: var(--c-accent); transition: opacity 0.2s; }
         .filter-tag::after { content: " ]"; opacity: 0; color: var(--c-accent); transition: opacity 0.2s; }
         .filter-separator { opacity: 0.3; margin: 0 0.25rem; }
 
-        /* Clear Btn */
-        .clear-container { height: 2rem; width: 100%; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transform: translateY(5px); transition: all 0.4s ease; }
+        .clear-container { height: 1.5rem; width: 100%; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transform: translateY(5px); transition: all 0.4s ease; }
         .clear-container.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
         .clear-btn { font-family: var(--f-sans); font-size: 0.75rem; background: none; border: none; color: var(--c-accent); cursor: pointer; border-bottom: 1px dotted var(--c-accent); }
         .clear-btn:hover { color: var(--c-text); border-bottom-style: solid; }
 
         /* --- CSS LOGIC --- */
         body:has(.filter-check:checked) .entry { opacity: 0.1; filter: grayscale(100%) blur(1px); }
-        <!-- INJECT_CSS -->
+        <!-- INJECT_CSS_LOGIC -->
 
         /* --- ENTRY STYLES --- */
         .year-block { margin-bottom: 4rem; }
         .year-title { font-family: var(--f-sans); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; color: var(--c-text); margin-bottom: 2rem; padding-bottom: 0.25rem; border-bottom: 2px solid var(--c-text); display: inline-block; }
         .entry { margin-bottom: 2.5rem; transition: opacity 0.4s ease, filter 0.4s ease; }
-        .entry-row { display: flex; align-items: baseline; width: 100%; gap: 0.5rem; }
-        .dots { flex-grow: 1; border-bottom: 2px dotted var(--c-sub); opacity: 0.4; position: relative; }
 
-        /* Metadata */
-        .meta-group { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
+        /* Article Layout with Overflow Fix */
+        .entry-row {
+            display: flex;
+            align-items: baseline;
+            width: 100%;
+            gap: 0.5rem;
+            max-width: 100%; /* Ensure row respects container */
+        }
+
+        .entry-title {
+            font-size: 1.35rem;
+            font-weight: 400;
+            white-space: nowrap;
+
+            /* Overflow Logic */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 1; /* Allow title to shrink */
+            min-width: 0;   /* Flexbox hack for nested truncation */
+        }
+
+        .entry-title:hover { text-decoration: underline; text-underline-offset: 4px; color: var(--c-accent); }
+
+        /* Dots and Date don't shrink */
+        .dots {
+            flex-grow: 1;
+            border-bottom: 2px dotted var(--c-sub);
+            opacity: 0.4;
+            position: relative;
+            flex-shrink: 0;
+            min-width: 1rem; /* Keep at least a small gap */
+        }
+
+        .meta-group {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-shrink: 0; /* Don't squash metadata */
+        }
+
         .meta-stat { display: flex; align-items: center; gap: 0.3em; font-family: var(--f-sans); font-size: 0.75rem; color: var(--c-sub); font-weight: 500; text-decoration: none; }
         .meta-stat svg { width: 1em; height: 1em; stroke: currentColor; stroke-width: 2; fill: none; }
         .entry:hover .meta-stat { color: var(--c-text); }
         a.meta-stat:hover { color: var(--c-accent); text-decoration: underline; }
         .entry-date { font-family: var(--f-sans); font-weight: 500; font-size: 0.85rem; color: var(--c-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-        /* Article */
-        .entry-title { font-size: 1.35rem; font-weight: 400; white-space: nowrap; }
         .entry-summary { display: block; margin-top: 0.25rem; font-size: 0.95rem; color: var(--c-sub); max-width: 90%; line-height: 1.4; text-wrap: pretty; }
-        .entry-title:hover { text-decoration: underline; text-underline-offset: 4px; color: var(--c-accent); }
 
-        /* Note */
+        /* Note Style */
         .entry.tag-not { padding-left: 1.5rem; border-left: 3px solid color-mix(in oklch, var(--c-sub), transparent 70%); margin-bottom: 3rem; }
         .note-text { font-size: 1.1rem; line-height: 1.5; color: var(--c-text); margin-bottom: 0.5rem; font-style: italic; }
         .note-meta { font-family: var(--f-sans); font-size: 0.75rem; color: var(--c-sub); display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;}
@@ -111,7 +165,7 @@
         .note-media { margin-bottom: 0.75rem; border-radius: 4px; overflow: hidden; border: 1px solid color-mix(in oklch, var(--c-text), transparent 90%); }
         .note-media img { display: block; width: 100%; height: auto; }
 
-        /* Commit */
+        /* Commit Style */
         .entry.tag-rel { margin-bottom: 2rem; }
         .rel-repo { font-family: var(--f-mono); font-weight: 700; font-size: 0.95rem; color: var(--c-text); }
         .rel-version { font-family: var(--f-mono); font-size: 0.75rem; color: var(--c-accent); background: color-mix(in oklch, var(--c-accent), transparent 90%); padding: 1px 4px; border-radius: 3px; margin-left: 0.5ch; }
@@ -174,9 +228,7 @@
             <header>
                 <h1><!-- CONFIG_NAME --></h1>
                 <p class="bio"><!-- CONFIG_TAGLINE --></p>
-
                 <!-- INJECT_STATUS -->
-
                 <div class="filter-interface">
                     <div class="filter-list">
                         <!-- INJECT_FILTER_LIST -->

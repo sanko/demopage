@@ -1,28 +1,30 @@
 {
-  "name": "codex-blog",
-  "version": "1.0.0",
+  "name": "monolog",
+  "version": "0.0.1",
   "description": "A headless, single-column content aggregator.",
   "main": "build.js",
   "scripts": {
-    "build": "node build.js",
-    "dev": "node build.js"
+    "build": "node build.js"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
     "markdown-it": "^13.0.2",
-    "node-fetch": "^2.6.7",
-    "rss": "^1.2.2"
+    "node-emoji": "^1.11.0",
+    "node-fetch": "^2.7.0",
+    "rss": "^1.2.2",
+    "rss-parser": "^3.13.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sanko/demopage.git"
+    "url": "git+https://github.com/sanko/monolog.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/sanko/demopage/issues"
+    "url": "https://github.com/sanko/monolog/issues"
   },
-  "homepage": "https://github.com/sanko/demopage#readme"
+  "homepage": "https://github.com/sanko/monolog#readme",
+  "devDependencies": {}
 }
